@@ -1,4 +1,4 @@
-name: Import complete Nova Math v1.3.2
+name: Bootstrap Nova Math from production
 
 on:
   push:
@@ -11,70 +11,99 @@ permissions:
   contents: write
 
 concurrency:
-  group: nova-v132-import
+  group: nova-bootstrap
   cancel-in-progress: false
 
 jobs:
-  import:
+  bootstrap:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download unchanged Nova Math library from production
+      - name: Download public Nova Math library
         shell: bash
         run: |
           python3 - <<'PY'
-          import concurrent.futures
-          import pathlib
-          import re
-          import time
-          import urllib.parse
-          import urllib.request
+          import json, pathlib, re, time
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
 
-          base = "https://www.totallynovamath.duckdns.org"
-          root = pathlib.Path(".")
+          BASE = "https://www.totallynovamath.duckdns.org/"
+          root = pathlib.Path(".").resolve()
 
-          public_files = {
-              "app-icon-192.png",
-              "nova-v1.js",
-              "platform.css",
-              "games.js",
-              "apps/choices-voices-packs.html",
-              "nova-v1.css",
-              "platform-v69.js",
-              "sports-v69.css",
-              "classroom-icon.svg",
-              "enhancements.css",
-              "style.css",
-              "v70-chromebook.css",
-              "sw.js",
-              "enhancements.js",
-              "watch-party.js",
-              "v68-ui.css",
-              "assets/vine-boom.wav",
-              "assets/secret-6753.jpg",
-              "assets/retro-bowl-hero.mp4",
-              "assets/nova-logo.png",
-              "assets/retro-bowl-hero-poster.jpg",
-              "watch-party.css",
-              "native-apps.css",
-              "app-icon-512.png",
-              "manifest.webmanifest",
-              "sports-v69.js",
-              "callback.html",
-              "platform.js",
-              "social.css",
-              "v68-ui.js",
-              "platform-v69.css",
-              "index.html",
-              "native-apps.js",
-              "social.js",
-          }
+          public_files = [
+            "nova-v1.js",
+            "assets/vine-boom.wav",
+            "assets/secret-6753.jpg",
+            "assets/nova-logo.png",
+            "assets/retro-bowl-hero.mp4",
+            "assets/retro-bowl-hero-poster.jpg",
+            "platform.css",
+            "nova-v1.css",
+            "native-apps.css",
+            "DEPLOY-VERCEL-DROP.txt",
+            "manifest.webmanifest",
+            "platform-v69.js",
+            "callback.html",
+            "apps/choices-voices-packs.html",
+            "sw.js",
+            "sports-v69.css",
+            "v68-ui.css",
+            "app-icon-192.png",
+            "enhancements.css",
+            "v70-chromebook.css",
+            "social.js",
+            "platform-v69.css",
+            "classroom-icon.svg",
+            "app-icon-512.png",
+            "SOCIAL-SETUP.txt",
+            "v68-ui.js",
+            "SCRAMJET-BACKEND.txt",
+            "social.css",
+            "watch-party.css",
+            "enhancements.js",
+            "REMOVED-BROKEN-GAMES.txt",
+            "ENVIRONMENT-VARIABLES.txt",
+            "NOVA-MATH-V1.2.txt",
+            "style.css",
+            "native-apps.js",
+            "sports-v69.js",
+            "watch-party.js",
+            "platform.js",
+            "games.js",
+            "index.html",
+          ]
 
-          extra_docs = {
+          def fetch_bytes(path):
+              url = BASE + quote(path, safe="/")
+              last = None
+              for attempt in range(4):
+                  try:
+                      req = Request(url, headers={"User-Agent": "NovaMath-GitHub-Importer/1.0"})
+                      with urlopen(req, timeout=90) as r:
+                          if r.status != 200:
+                              raise RuntimeError(f"HTTP {r.status}")
+                          return r.read()
+                  except Exception as e:
+                      last = e
+                      time.sleep(1.5 * (attempt + 1))
+              raise RuntimeError(f"Failed {path}: {last}")
+
+          # Get games.js first so the game list itself defines the main docs set.
+          games = fetch_bytes("games.js")
+          (root / "games.js").write_bytes(games)
+          text = games.decode("utf-8")
+          m = re.search(r"window\.BUILT_IN_GAMES\s*=\s*(\[.*?\]);?\s*$", text, re.S)
+          if not m:
+              raise SystemExit("Could not parse BUILT_IN_GAMES")
+          catalog = json.loads(m.group(1))
+          docs = {g["file"] for g in catalog if isinstance(g.get("file"), str) and g["file"].startswith("docs/")}
+          docs.update({
               "docs/clhextris.html",
               "docs/clmariominusrabbids.html",
               "docs/clonenightasfreddy.html",
@@ -84,125 +113,58 @@ jobs:
               "docs/clthrowapotato.html",
               "docs/fd.html",
               "docs/shotgun-mario-64-rom.zip",
-          }
+          })
 
-          def url_for(path):
-              return base + "/" + urllib.parse.quote(path, safe="/")
+          targets = sorted((set(public_files) - {"games.js"}) | docs)
+          print(f"Downloading {len(targets)} production files...")
 
-          def fetch(path, retries=5):
-              dest = root / path
+          def save(path):
+              data = fetch_bytes(path)
+              dest = root.joinpath(*pathlib.PurePosixPath(path).parts)
               dest.parent.mkdir(parents=True, exist_ok=True)
-              last = None
-              for attempt in range(retries):
-                  try:
-                      req = urllib.request.Request(
-                          url_for(path),
-                          headers={"User-Agent": "NovaMath-GitHub-Importer/1.3.2"},
-                      )
-                      with urllib.request.urlopen(req, timeout=120) as response:
-                          if response.status != 200:
-                              raise RuntimeError(f"HTTP {response.status}")
-                          with dest.open("wb") as out:
-                              while True:
-                                  chunk = response.read(1024 * 1024)
-                                  if not chunk:
-                                      break
-                                  out.write(chunk)
-                      return
-                  except Exception as exc:
-                      last = exc
-                      if attempt + 1 < retries:
-                          time.sleep(2 * (attempt + 1))
-              raise RuntimeError(f"{path}: {last}")
-
-          fetch("games.js")
-          games_text = pathlib.Path("games.js").read_text("utf-8", errors="replace")
-          docs = set(re.findall(r'"file":"(docs/[^"]+)"', games_text))
-          docs = {p for p in docs if p.startswith("docs/")}
-          if len(docs) != 1991:
-              raise SystemExit(f"Expected 1,991 referenced local games, found {len(docs)}")
-          docs.update(extra_docs)
-          if len(docs) != 2000:
-              raise SystemExit(f"Expected 2,000 real docs files, found {len(docs)}")
-
-          targets = sorted((public_files - {"games.js"}) | docs)
-          print(f"Downloading {len(targets)} remaining public files...")
+              dest.write_bytes(data)
+              return path, len(data)
 
           failures = []
-          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-              future_map = {pool.submit(fetch, p): p for p in targets}
-              for i, future in enumerate(concurrent.futures.as_completed(future_map), 1):
-                  path = future_map[future]
+          total = 0
+          with ThreadPoolExecutor(max_workers=16) as pool:
+              futs = {pool.submit(save, p): p for p in targets}
+              for idx, fut in enumerate(as_completed(futs), 1):
+                  path = futs[fut]
                   try:
-                      future.result()
-                  except Exception as exc:
-                      failures.append(str(exc))
-                  if i % 100 == 0:
-                      print(f"Completed {i}/{len(targets)}")
+                      _, size = fut.result()
+                      total += size
+                  except Exception as e:
+                      failures.append(f"{path}: {e}")
+                  if idx % 200 == 0:
+                      print(f"Completed {idx}/{len(targets)}")
 
           if failures:
               print("\n".join(failures[:50]))
-              raise SystemExit(f"{len(failures)} production downloads failed")
+              raise SystemExit(f"{len(failures)} downloads failed")
 
-          pathlib.Path("docs/.gitkeep").touch()
-          pathlib.Path("thumbs").mkdir(exist_ok=True)
-          pathlib.Path("thumbs/.gitkeep").touch()
+          # Preserve the two empty marker files from the canonical ZIP.
+          (root / "docs").mkdir(exist_ok=True)
+          (root / "docs/.gitkeep").touch()
+          (root / "thumbs").mkdir(exist_ok=True)
+          (root / "thumbs/.gitkeep").touch()
 
-          actual_docs = [p for p in pathlib.Path("docs").iterdir() if p.is_file()]
+          actual_docs = [p for p in (root / "docs").iterdir() if p.is_file()]
           if len(actual_docs) != 2001:
-              raise SystemExit(f"Expected 2,001 docs entries including .gitkeep, found {len(actual_docs)}")
+              raise SystemExit(f"Expected 2001 docs files, found {len(actual_docs)}")
 
-          print("Production library downloaded and verified.")
+          print(f"Downloaded {len(targets)} files, {total} bytes. Docs count verified: 2001.")
           PY
 
-      - name: Apply exact v1.3.2 patch
-        shell: bash
-        run: |
-          cat .nova-import/patch.part1 .nova-import/patch.part2 .nova-import/patch.part3 .nova-import/patch.part4             | base64 -d | gunzip > /tmp/v132.patch
-          git apply --check /tmp/v132.patch
-          git apply /tmp/v132.patch
-
-          echo 'Tm92YSBNYXRoIHYxLjMuMgoKLSBTaW1wbGlmaWVkIERpc2NvcmQgZW52aXJvbm1lbnQgdmFyaWFibGUgbmFtZXMgZm9yIFZlcmNlbC4KLSBVc2UgTk9WQV9SRVBPUlRTX1dFQkhPT0sgZm9yIHByaXZhdGUgaXNzdWUgcmVwb3J0cy4KLSBVc2UgTk9WQV9BRE1JTl9BTEVSVFNfV0VCSE9PSyBmb3IgYWRtaW4gYWxlcnRzLgotIFVzZSBGT09EX1JFUVVFU1RfRElTQ09SRF9XRUJIT09LIGZvciBTbmFjayBEcm9wIG5vdGlmaWNhdGlvbnMuCi0gT2xkICpfRElTQ09SRF9XRUJIT09LIG5hbWVzIHJlbWFpbiBzdXBwb3J0ZWQgYXMgY29tcGF0aWJpbGl0eSBmYWxsYmFja3MuCi0gTm8gbmV3IFZlcmNlbCBmdW5jdGlvbnMgd2VyZSBhZGRlZC4K'             | base64 -d > NOVA-MATH-V1.3.2.txt
-
-          rm -rf .nova-import
-          rm -f README.md
-
-      - name: Validate canonical project
-        shell: bash
-        run: |
-          test -f index.html
-          test -f games.js
-          test -f sw.js
-          test -f package.json
-          test -f vercel.json
-          test -f server/vercel-bridge.mjs
-
-          FUNCTIONS=$(find api -maxdepth 1 -type f -name '*.mjs' | wc -l | tr -d ' ')
-          test "$FUNCTIONS" = "11"
-
-          DOCS=$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')
-          test "$DOCS" = "2001"
-
-          find . -maxdepth 1 -name '*.js' -print0 | xargs -0 -r -n1 node --check
-          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check
-
-          if grep -R -n -E 'BasicallyNoobYT|Basically Noob'               --exclude-dir=.git --exclude='*.zip' .; then
-            echo "Forbidden branding found"
-            exit 1
-          fi
-
-          echo "Nova Math v1.3.2 validation passed."
-
-      - name: Commit complete Nova Math v1.3.2
+      - name: Commit production library
         shell: bash
         run: |
           git config user.name "Nova Math Importer"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-
           if git diff --cached --quiet; then
-            echo "Nova Math v1.3.2 is already current."
+            echo "Production library already present."
           else
-            git commit -m "Import complete Nova Math v1.3.2 project"
+            git commit -m "Import Nova Math production library"
             git push origin HEAD:main
           fi
