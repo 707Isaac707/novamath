@@ -16,9 +16,18 @@ from botasaurus.soupify import soupify
 
 DEFAULT_INGEST_URL = "https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest"
 DEFAULT_SOURCES = [
-    ("IPTV-org Sports", "https://iptv-org.github.io/iptv/categories/sports.m3u"),
-    ("IPTV Cat Sports", "https://list.iptvcat.com/my_list/43a7920721455a884a8c7d23ee99c27f.m3u8"),
+    {"name": "IPTV-org Sports", "url": "https://iptv-org.github.io/iptv/categories/sports.m3u", "mode": "all"},
+    {"name": "IPTV-org United States", "url": "https://iptv-org.github.io/iptv/countries/us.m3u", "mode": "relevant"},
+    {"name": "IPTV-org English", "url": "https://iptv-org.github.io/iptv/languages/eng.m3u", "mode": "relevant"},
+    {"name": "IPTV-org Americas", "url": "https://iptv-org.github.io/iptv/regions/amer.m3u", "mode": "relevant"},
+    {"name": "IPTV-org Global Index", "url": "https://iptv-org.github.io/iptv/index.m3u", "mode": "relevant"},
+    {"name": "IPTV Cat Sports", "url": "https://list.iptvcat.com/my_list/43a7920721455a884a8c7d23ee99c27f.m3u8", "mode": "all"},
 ]
+
+SPORTS_RELEVANT_RE = re.compile(
+    r"""(?:\bsports?\b|\bespn\b|\bfox\b|\bcbs\b|\bnbc\b|\babc\b|\bcw\b|\btnt\b|\btbs\b|\btrutv\b|\busa network\b|\bnfl\b|\bnba\b|\bwnba\b|\bmlb\b|\bnhl\b|\bmls\b|\bncaa\b|\baccn?\b|\bsecn?\b|\bbig ten\b|\bbtn\b|football|soccer|basketball|baseball|hockey|golf|tennis|racing|motorsport|boxing|ufc|fight|red\s*zone|redzone|peacock|prime video)""",
+    re.IGNORECASE,
+)
 
 HLS_RE = re.compile(
     r"""https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""",
@@ -50,7 +59,7 @@ def clean_text(value, limit=160):
 def parse_sources():
     raw = env_text("BOTASAURUS_SPORTS_SOURCE_URLS")
     if not raw:
-        return [{"name": name, "url": url} for name, url in DEFAULT_SOURCES]
+        return [dict(row) for row in DEFAULT_SOURCES]
 
     rows = []
     for item in [x.strip() for x in re.split(r"[\n,]+", raw) if x.strip()]:
@@ -68,6 +77,7 @@ def parse_sources():
         rows.append({
             "name": clean_text(name or parsed.hostname, 120),
             "url": url[:1200],
+            "mode": "all",
         })
         if len(rows) >= 25:
             break
@@ -112,6 +122,106 @@ def extinf_title(line):
     return "Sports Stream"
 
 
+def source_accepts(source, name="", group="", tvg_id=""):
+    if source.get("mode") != "relevant":
+        return True
+    haystack = " ".join([str(name or ""), str(group or ""), str(tvg_id or "")])
+    return bool(SPORTS_RELEVANT_RE.search(haystack))
+
+
+def parse_json_payload(raw, source):
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+
+    rows = []
+    seen = set()
+
+    def walk(node, inherited=None):
+        inherited = inherited or {}
+        if isinstance(node, dict):
+            name = clean_text(
+                node.get("name")
+                or node.get("title")
+                or node.get("channel")
+                or node.get("displayName")
+                or inherited.get("name")
+                or source["name"],
+                120,
+            )
+            group = clean_text(
+                node.get("group")
+                or node.get("category")
+                or node.get("sport")
+                or node.get("league")
+                or inherited.get("group")
+                or source["name"],
+                100,
+            )
+            tvg_id = clean_text(
+                node.get("tvgId")
+                or node.get("tvg_id")
+                or node.get("id")
+                or inherited.get("tvgId")
+                or "",
+                100,
+            )
+            logo = clean_text(
+                node.get("logo")
+                or node.get("image")
+                or node.get("icon")
+                or inherited.get("logo")
+                or "",
+                1200,
+            )
+            meta = {"name": name, "group": group, "tvgId": tvg_id, "logo": logo}
+
+            for value in node.values():
+                if isinstance(value, str) and ".m3u8" in value.lower():
+                    url = normalize_stream_url(value, source["url"])
+                    if url and url not in seen and source_accepts(source, name, group, tvg_id):
+                        seen.add(url)
+                        rows.append({
+                            "name": name,
+                            "url": url,
+                            "logo": logo,
+                            "group": group,
+                            "country": clean_text(node.get("country") or "", 30),
+                            "language": clean_text(node.get("language") or "", 30),
+                            "tvgId": tvg_id,
+                            "sourcePage": source["url"],
+                            "source": "botasaurus-public-page",
+                        })
+
+            for value in node.values():
+                if isinstance(value, (dict, list)):
+                    walk(value, meta)
+
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, inherited)
+
+        elif isinstance(node, str) and ".m3u8" in node.lower():
+            url = normalize_stream_url(node, source["url"])
+            if url and url not in seen and source_accepts(source, inherited.get("name"), inherited.get("group"), inherited.get("tvgId")):
+                seen.add(url)
+                rows.append({
+                    "name": clean_text(inherited.get("name") or source["name"], 120),
+                    "url": url,
+                    "logo": clean_text(inherited.get("logo") or "", 1200),
+                    "group": clean_text(inherited.get("group") or source["name"], 100),
+                    "country": "",
+                    "language": "",
+                    "tvgId": clean_text(inherited.get("tvgId") or "", 100),
+                    "sourcePage": source["url"],
+                    "source": "botasaurus-public-page",
+                })
+
+    walk(data)
+    return rows
+
+
 def parse_m3u(raw, source):
     rows = []
     meta = None
@@ -122,21 +232,26 @@ def parse_m3u(raw, source):
             continue
 
         if line.startswith("#EXTINF:"):
+            name = extinf_title(line)
+            tvg_id = clean_text(attr(line, "tvg-id"), 100)
+            group = clean_text(attr(line, "group-title") or source["name"], 100)
             meta = {
-                "name": extinf_title(line),
-                "tvgId": clean_text(attr(line, "tvg-id"), 100),
+                "name": name,
+                "tvgId": tvg_id,
                 "logo": clean_text(attr(line, "tvg-logo"), 1200),
-                "group": clean_text(attr(line, "group-title") or source["name"], 100),
+                "group": group,
                 "country": clean_text(attr(line, "tvg-country"), 30),
                 "language": clean_text(attr(line, "tvg-language"), 30),
+                "_accepted": source_accepts(source, name, group, tvg_id),
             }
             continue
 
         if meta and not line.startswith("#"):
             stream_url = normalize_stream_url(line, source["url"])
-            if stream_url:
+            if stream_url and meta.get("_accepted", True):
+                row_meta = {k: v for k, v in meta.items() if not k.startswith("_")}
                 rows.append({
-                    **meta,
+                    **row_meta,
                     "url": stream_url,
                     "sourcePage": source["url"],
                     "source": "botasaurus-public-page",
@@ -172,15 +287,19 @@ def parse_html(response, source):
     seen = set()
 
     def add(raw_url, label=""):
+        name = clean_text(label or title or source["name"] or "Sports Stream", 120)
+        group = clean_text(source["name"], 100)
+        if not source_accepts(source, name, group, ""):
+            return
         stream_url = normalize_stream_url(raw_url, source["url"])
         if not stream_url or stream_url in seen:
             return
         seen.add(stream_url)
         rows.append({
-            "name": clean_text(label or title or source["name"] or "Sports Stream", 120),
+            "name": name,
             "url": stream_url,
             "logo": logo,
-            "group": clean_text(source["name"], 100),
+            "group": group,
             "country": "",
             "language": "",
             "tvgId": "",
@@ -214,8 +333,12 @@ def scrape_source(http: Request, source):
         raise RuntimeError("source returned HTTP %s" % status)
 
     raw = str(getattr(response, "text", "") or "")
-    if raw.lstrip().startswith("#EXTM3U"):
+    stripped = raw.lstrip()
+    content_type = str(getattr(response, "headers", {}).get("content-type", "")).lower()
+    if stripped.startswith("#EXTM3U"):
         channels = parse_m3u(raw, source)
+    elif "json" in content_type or stripped.startswith("{") or stripped.startswith("["):
+        channels = parse_json_payload(raw, source)
     else:
         channels = parse_html(response, source)
 
@@ -259,7 +382,7 @@ def validate_hls(channel):
 def dedupe(channels):
     seen = set()
     output = []
-    max_candidates = env_int("BOTASAURUS_MAX_CANDIDATES", 350, 1, 700)
+    max_candidates = env_int("BOTASAURUS_MAX_CANDIDATES", 1400, 1, 2000)
 
     for channel in channels:
         url = normalize_stream_url(channel.get("url", ""))
@@ -356,7 +479,7 @@ def main():
     if not candidates:
         raise RuntimeError("Botasaurus found no HLS candidates; current Vercel snapshot was left untouched")
 
-    workers = env_int("BOTASAURUS_VALIDATION_WORKERS", 16, 1, 32)
+    workers = env_int("BOTASAURUS_VALIDATION_WORKERS", 48, 1, 64)
     valid = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
@@ -373,7 +496,7 @@ def main():
             else:
                 errors.append({"url": row["url"], "error": reason})
 
-    max_streams = env_int("BOTASAURUS_MAX_STREAMS", 300, 1, 500)
+    max_streams = env_int("BOTASAURUS_MAX_STREAMS", 1000, 1, 1200)
     valid = valid[:max_streams]
 
     if not valid:
