@@ -80,7 +80,7 @@ function sanitizeIngestChannels(rows){
       sourcePage:txt(row?.sourcePage,1200),
       source:'botasaurus-public-page'
     });
-    if(out.length>=500)break;
+    if(out.length>=1200)break;
   }
   return out;
 }
