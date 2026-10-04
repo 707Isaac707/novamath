@@ -56,6 +56,11 @@ function cleanNetworkName(v){
 function canonicalNetwork(v){
   const n=cleanNetworkName(v);
   for(const [key,aliases] of NETWORK_ALIASES)if(aliases.includes(n))return key;
+  if(/^cbs(?:\s|$)/.test(n)&&!/sports|golazo|news/.test(n))return 'cbs';
+  if(/^fox(?:\s|$)/.test(n)&&!/sports|deportes|news|weather|business/.test(n))return 'fox';
+  if(/^nbc(?:\s|$)/.test(n)&&!/sports|news/.test(n))return 'nbc';
+  if(/^abc(?:\s|$)/.test(n)&&!/news/.test(n))return 'abc';
+  if(/^(?:the\s+)?cw(?:\s|$)/.test(n))return 'cw';
   return '';
 }
 function channelCanonical(c){
