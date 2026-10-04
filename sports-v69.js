@@ -16,6 +16,68 @@ const api=async(params)=>{const q=new URLSearchParams(params);try{const r=await 
 const fmtTime=d=>{const x=new Date(d);return Number.isNaN(x.getTime())?'':x.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'});};
 const favTeams=()=>new Set(read(key('sports_fav_teams_v1'),[]));
 const favChannels=()=>new Set(read(key('sports_fav_channels_v1'),[]));
+const NETWORK_ALIASES=[
+  ['espn2',['espn2','espn 2']],
+  ['espnu',['espnu','espn u']],
+  ['espnews',['espnews','espn news']],
+  ['espndeportes',['espn deportes']],
+  ['espn',['espn']],
+  ['fs1',['fs1','fox sports 1']],
+  ['fs2',['fs2','fox sports 2']],
+  ['foxdeportes',['fox deportes']],
+  ['nflnetwork',['nfl network','nfln']],
+  ['nbatv',['nba tv']],
+  ['mlbnetwork',['mlb network']],
+  ['nhlnetwork',['nhl network']],
+  ['cbs sports network',['cbs sports network','cbssn']],
+  ['accnetwork',['acc network','accn']],
+  ['secnetwork',['sec network','secn']],
+  ['bigtennetwork',['big ten network','btn']],
+  ['tnt',['tnt']],
+  ['tbs',['tbs']],
+  ['trutv',['trutv','tru tv']],
+  ['golfchannel',['golf channel']],
+  ['usanetwork',['usa network']]
+];
+function cleanNetworkName(v){
+  return String(v||'').toLowerCase()
+    .replace(/\([^)]*(?:\d{3,4}p|hd|sd|uhd|4k)[^)]*\)/g,' ')
+    .replace(/\b(?:\d{3,4}p|hd|sd|uhd|4k)\b/g,' ')
+    .replace(/\b(?:us|usa)\b$/g,' ')
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim().replace(/\s+/g,' ');
+}
+function canonicalNetwork(v){
+  const n=cleanNetworkName(v);
+  for(const [key,aliases] of NETWORK_ALIASES)if(aliases.includes(n))return key;
+  return '';
+}
+function channelCanonical(c){
+  const direct=canonicalNetwork(c?.name);
+  if(direct)return direct;
+  const tvg=String(c?.tvgId||'').split('@')[0].replace(/[._-]+/g,' ');
+  return canonicalNetwork(tvg);
+}
+function findGameChannel(game){
+  if(!game||game.status?.state!=='in'||!channels.length)return null;
+  const broadcasts=(game.broadcasts||[]).map(x=>String(x||'').trim()).filter(Boolean);
+  for(const broadcast of broadcasts){
+    const key=canonicalNetwork(broadcast);
+    if(!key)continue;
+    const matches=channels.filter(c=>channelCanonical(c)===key);
+    if(!matches.length)continue;
+    matches.sort((a,b)=>Number(String(b.country||'').toUpperCase()==='US')-Number(String(a.country||'').toUpperCase()==='US')||Number(!!b.logo)-Number(!!a.logo)||String(a.name).length-String(b.name).length);
+    return {channel:matches[0],broadcast,key};
+  }
+  return null;
+}
+function playGameMatch(match){
+  if(!match?.channel)return;
+  playChannel(match.channel);
+  const status=$('#mhSportsPlayerStatus');
+  if(status)status.textContent=`Matched ${match.broadcast} to ${match.channel.name}. Availability depends on the broadcaster.`;
+  document.querySelector('.mh-sports-player-card')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
 function toast(t,i='🏟️'){window.showToast?.(t,i)}
 function mount(){
   const root=$('#sportsMount');if(!root)return;
@@ -62,14 +124,14 @@ function mount(){
 }
 function renderLeagues(){const host=$('#mhSportsLeagues');if(!host)return;host.innerHTML=LEAGUES.map(([id,label])=>`<button data-league="${id}" class="${id===activeLeague?'active':''}">${label}</button>`).join('');host.querySelectorAll('[data-league]').forEach(b=>b.onclick=()=>{activeLeague=b.dataset.league;renderLeagues();loadScores(true);});}
 async function loadScores(showLoading=false){const host=$('#mhSportsScores');if(!host)return;if(showLoading)host.innerHTML='<div class="mh-sports-loading">Updating scores…</div>';try{const j=await api({action:'scoreboard',league:activeLeague});lastScores=j.events||[];renderScores(lastScores);const live=lastScores.filter(e=>e.status?.state==='in').length;$('#mhSportsLiveCount').textContent=String(live);$('#mhSportsLeagueKicker').textContent=j.label||activeLeague.toUpperCase();$('#mhSportsUpdated').textContent='Updated '+new Date(j.updatedAt||Date.now()).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · Live scores';}catch(e){host.innerHTML=`<div class="mh-sports-error">${esc(e.message)} <button onclick="window.mhSportsRefresh?.()">Retry</button></div>`;}}
-function renderScores(events){const host=$('#mhSportsScores');if(!host)return;if(!events.length){host.innerHTML='<div class="mh-sports-empty">No games found for this league right now.</div>';return;}const fav=favTeams();host.innerHTML=events.map(e=>{const away=e.teams?.find(t=>t.homeAway==='away')||e.teams?.[0]||{},home=e.teams?.find(t=>t.homeAway==='home')||e.teams?.[1]||{};const live=e.status?.state==='in',pre=e.status?.state==='pre';const star=fav.has(away.id)||fav.has(home.id);return `<article class="mh-score-card ${live?'live':''}" data-game="${esc(e.id)}"><div class="mh-score-top"><span>${live?'<i></i> LIVE':pre?fmtTime(e.date):esc(e.status?.detail||'Final')}</span><small>${esc((e.broadcasts||[]).join(' · '))}</small><button data-fav-game="${esc(e.id)}" title="Favorite teams">${star?'★':'☆'}</button></div>${teamLine(away)}${teamLine(home)}<div class="mh-score-foot"><span>${esc(e.venue||'')}</span><button data-detail="${esc(e.id)}">Game Center</button></div></article>`;}).join('');host.querySelectorAll('[data-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openGame(b.dataset.detail)});host.querySelectorAll('[data-fav-game]').forEach(b=>b.onclick=e=>{e.stopPropagation();const ev=events.find(x=>x.id===b.dataset.favGame);if(ev)toggleGameTeams(ev);});}
+function renderScores(events){const host=$('#mhSportsScores');if(!host)return;if(!events.length){host.innerHTML='<div class="mh-sports-empty">No games found for this league right now.</div>';return;}const fav=favTeams();host.innerHTML=events.map(e=>{const away=e.teams?.find(t=>t.homeAway==='away')||e.teams?.[0]||{},home=e.teams?.find(t=>t.homeAway==='home')||e.teams?.[1]||{};const live=e.status?.state==='in',pre=e.status?.state==='pre';const star=fav.has(away.id)||fav.has(home.id),watch=live?findGameChannel(e):null;return `<article class="mh-score-card ${live?'live':''}" data-game="${esc(e.id)}"><div class="mh-score-top"><span>${live?'<i></i> LIVE':pre?fmtTime(e.date):esc(e.status?.detail||'Final')}</span><small>${esc((e.broadcasts||[]).join(' · '))}</small><button data-fav-game="${esc(e.id)}" title="Favorite teams">${star?'★':'☆'}</button></div>${teamLine(away)}${teamLine(home)}<div class="mh-score-foot"><span>${esc(e.venue||'')}</span><div class="mh-score-actions">${watch?`<button class="mh-watch-live" data-watch-game="${esc(e.id)}" title="Matched to ${esc(watch.channel.name)}">▶ Watch Live</button>`:''}<button data-detail="${esc(e.id)}">Game Center</button></div></div></article>`;}).join('');host.querySelectorAll('[data-watch-game]').forEach(b=>b.onclick=e=>{e.stopPropagation();const ev=events.find(x=>x.id===b.dataset.watchGame),match=findGameChannel(ev);if(match)playGameMatch(match);else toast('No matching live channel right now','⚠')});host.querySelectorAll('[data-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openGame(b.dataset.detail)});host.querySelectorAll('[data-fav-game]').forEach(b=>b.onclick=e=>{e.stopPropagation();const ev=events.find(x=>x.id===b.dataset.favGame);if(ev)toggleGameTeams(ev);});}
 function teamLine(t){return `<div class="mh-score-team"><span class="mh-score-logo">${t.logo?`<img src="${esc(t.logo)}" alt="">`:esc(t.abbreviation||'?')}</span><div><strong>${esc(t.shortName||t.name||'Team')}</strong><small>${esc(t.record||t.abbreviation||'')}</small></div><b>${esc(t.score||'')}</b></div>`;}
 function toggleGameTeams(e){const set=favTeams(),ids=(e.teams||[]).map(t=>t.id).filter(Boolean),all=ids.every(id=>set.has(id));ids.forEach(id=>all?set.delete(id):set.add(id));write(key('sports_fav_teams_v1'),[...set]);renderScores(lastScores);toast(all?'Teams removed from favorites':'Teams favorited',all?'☆':'★');}
 async function loadRedZone(force=false){const host=$('#mhRedZoneGames');if(!host)return;if(force)host.innerHTML='<div class="mh-sports-loading">Refreshing NFL tracker…</div>';try{const j=await api({action:'scoreboard',league:'nfl'}),events=j.events||[],live=events.filter(e=>e.status?.state==='in');host.innerHTML=(live.length?live:events.filter(e=>e.status?.state==='pre').slice(0,6)).map(e=>{const a=e.teams?.find(t=>t.homeAway==='away')||{},h=e.teams?.find(t=>t.homeAway==='home')||{};return `<button class="mh-redzone-game ${e.status?.state==='in'?'live':''}" data-rz="${esc(e.id)}"><span>${e.status?.state==='in'?'LIVE':fmtTime(e.date)}</span><div><b>${esc(a.abbreviation||a.shortName)} ${esc(a.score||'')}</b><b>${esc(h.abbreviation||h.shortName)} ${esc(h.score||'')}</b></div><small>${esc(e.status?.detail||'')}</small></button>`;}).join('')||'<div class="mh-sports-empty">No NFL games scheduled right now.</div>';host.querySelectorAll('[data-rz]').forEach(b=>b.onclick=()=>openGame(b.dataset.rz,'nfl'));}catch(e){host.innerHTML='<div class="mh-sports-error">NFL tracker unavailable.</div>';}}
 function ensureGameModal(){if(gameModal)return gameModal;gameModal=document.createElement('section');gameModal.id='mhSportsGameModal';gameModal.className='mh-sports-modal';gameModal.hidden=true;gameModal.innerHTML='<div class="mh-sports-modal-card"><button id="mhSportsGameClose" class="mh-sports-modal-close">×</button><div id="mhSportsGameBody"></div></div>';document.body.appendChild(gameModal);$('#mhSportsGameClose').onclick=()=>gameModal.hidden=true;gameModal.addEventListener('click',e=>{if(e.target===gameModal)gameModal.hidden=true});return gameModal;}
-async function openGame(id,league=activeLeague){const m=ensureGameModal(),body=$('#mhSportsGameBody');m.hidden=false;body.innerHTML='<div class="mh-sports-loading">Loading Game Center…</div>';try{const j=await api({action:'game',league,id}),d=j.details||{};const a=d.teams?.find(t=>t.homeAway==='away')||d.teams?.[0]||{},h=d.teams?.find(t=>t.homeAway==='home')||d.teams?.[1]||{};body.innerHTML=`<div class="mh-gamecenter-head"><small>${league.toUpperCase()} GAME CENTER</small><h2>${esc(a.shortName||a.name)} ${esc(a.score||'')} <span>at</span> ${esc(h.shortName||h.name)} ${esc(h.score||'')}</h2><p>${esc(d.status?.detail||'')}</p></div>${d.fantasy?.length?fantasyTable(d.fantasy,d.fantasyScoring):''}<section class="mh-gamecenter-section"><h3>Scoring</h3>${d.scoring?.length?d.scoring.slice().reverse().map(x=>`<div class="mh-scoring-row"><span>Q${x.period} ${esc(x.clock)}</span><strong>${esc(x.text)}</strong><b>${x.awayScore}-${x.homeScore}</b></div>`).join(''):'<div class="mh-sports-empty">No scoring plays available.</div>'}</section>`;}catch(e){body.innerHTML=`<div class="mh-sports-error">${esc(e.message)}</div>`;}}
+async function openGame(id,league=activeLeague){const m=ensureGameModal(),body=$('#mhSportsGameBody');m.hidden=false;body.innerHTML='<div class="mh-sports-loading">Loading Game Center…</div>';try{const j=await api({action:'game',league,id}),d=j.details||{};const a=d.teams?.find(t=>t.homeAway==='away')||d.teams?.[0]||{},h=d.teams?.find(t=>t.homeAway==='home')||d.teams?.[1]||{},watch=findGameChannel(d);body.innerHTML=`<div class="mh-gamecenter-head"><small>${league.toUpperCase()} GAME CENTER</small><h2>${esc(a.shortName||a.name)} ${esc(a.score||'')} <span>at</span> ${esc(h.shortName||h.name)} ${esc(h.score||'')}</h2><p>${esc(d.status?.detail||'')}</p>${watch?`<button id="mhGameWatchLive" class="mh-game-watch">▶ Watch Live on ${esc(watch.broadcast)}</button>`:''}</div>${d.fantasy?.length?fantasyTable(d.fantasy,d.fantasyScoring):''}<section class="mh-gamecenter-section"><h3>Scoring</h3>${d.scoring?.length?d.scoring.slice().reverse().map(x=>`<div class="mh-scoring-row"><span>Q${x.period} ${esc(x.clock)}</span><strong>${esc(x.text)}</strong><b>${x.awayScore}-${x.homeScore}</b></div>`).join(''):'<div class="mh-sports-empty">No scoring plays available.</div>'}</section>`;if(watch)$('#mhGameWatchLive').onclick=()=>{m.hidden=true;playGameMatch(watch)};}catch(e){body.innerHTML=`<div class="mh-sports-error">${esc(e.message)}</div>`;}}
 function fantasyTable(rows,note){return `<section class="mh-gamecenter-section"><div class="mh-fantasy-head"><div><h3>Fantasy Points</h3><p>Average of Standard, Half-PPR, and PPR estimates.</p></div><span>LIVE ESTIMATE</span></div><div class="mh-fantasy-table"><div class="mh-fantasy-row head"><span>Player</span><b>AVG</b><b>STD</b><b>0.5</b><b>PPR</b></div>${rows.slice(0,18).map(p=>`<div class="mh-fantasy-row"><span>${p.headshot?`<img src="${esc(p.headshot)}" alt="">`:''}<em><strong>${esc(p.name)}</strong><small>${esc(p.team)} ${esc(p.position)}</small></em></span><b>${p.average.toFixed(1)}</b><b>${p.standard.toFixed(1)}</b><b>${p.half.toFixed(1)}</b><b>${p.ppr.toFixed(1)}</b></div>`).join('')}</div><small class="mh-fantasy-note">${esc(note||'')}</small></section>`;}
-async function loadChannels(force=false){const host=$('#mhSportsChannels');if(!host)return;try{const j=await api({action:'channels',...(force?{t:Date.now()}: {})});channels=j.channels||[];redZoneChannel=j.redZone||channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;channelSource=j.source||'';updateRedZoneSource();renderChannels();}catch(e){redZoneChannel=null;updateRedZoneSource(e.message);host.innerHTML=`<div class="mh-sports-error">${esc(e.message)}</div>`;}}
+async function loadChannels(force=false){const host=$('#mhSportsChannels');if(!host)return;try{const j=await api({action:'channels',...(force?{t:Date.now()}: {})});channels=j.channels||[];redZoneChannel=j.redZone||channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;channelSource=j.source||'';updateRedZoneSource();renderChannels();if(lastScores.length)renderScores(lastScores);}catch(e){redZoneChannel=null;updateRedZoneSource(e.message);host.innerHTML=`<div class="mh-sports-error">${esc(e.message)}</div>`;}}
 
 function sourceLabel(c){
   if(c?.source==='botasaurus-public-page')return 'Botasaurus';
