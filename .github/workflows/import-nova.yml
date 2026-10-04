@@ -1,4 +1,4 @@
-name: Bootstrap Nova Math from live production
+name: Import complete Nova Math v1.3.2
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: nova-live-bootstrap
+  group: nova-v132-import
   cancel-in-progress: false
 
 jobs:
@@ -23,10 +23,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Import unchanged production files
+      - name: Download unchanged Nova Math library from production
         shell: bash
-        env:
-          NOVA_SOURCE: https://totallynovamath.duckdns.org
         run: |
           python3 - <<'PY'
           import concurrent.futures
@@ -36,75 +34,62 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          base = "https://totallynovamath.duckdns.org"
+          base = "https://www.totallynovamath.duckdns.org"
           root = pathlib.Path(".")
 
-          root_files = [
+          public_files = {
+              "app-icon-192.png",
               "nova-v1.js",
               "platform.css",
-              "nova-v1.css",
-              "native-apps.css",
-              "manifest.webmanifest",
-              "platform-v69.js",
-              "callback.html",
-              "sw.js",
-              "sports-v69.css",
-              "v68-ui.css",
-              "app-icon-192.png",
-              "enhancements.css",
-              "v70-chromebook.css",
-              "social.js",
-              "platform-v69.css",
-              "classroom-icon.svg",
-              "app-icon-512.png",
-              "v68-ui.js",
-              "social.css",
-              "watch-party.css",
-              "enhancements.js",
-              "style.css",
-              "native-apps.js",
-              "sports-v69.js",
-              "watch-party.js",
-              "platform.js",
               "games.js",
-              "index.html",
-          ]
-
-          assets = [
+              "apps/choices-voices-packs.html",
+              "nova-v1.css",
+              "platform-v69.js",
+              "sports-v69.css",
+              "classroom-icon.svg",
+              "enhancements.css",
+              "style.css",
+              "v70-chromebook.css",
+              "sw.js",
+              "enhancements.js",
+              "watch-party.js",
+              "v68-ui.css",
               "assets/vine-boom.wav",
               "assets/secret-6753.jpg",
-              "assets/nova-logo.png",
               "assets/retro-bowl-hero.mp4",
+              "assets/nova-logo.png",
               "assets/retro-bowl-hero-poster.jpg",
-              "apps/choices-voices-packs.html",
-          ]
+              "watch-party.css",
+              "native-apps.css",
+              "app-icon-512.png",
+              "manifest.webmanifest",
+              "sports-v69.js",
+              "callback.html",
+              "platform.js",
+              "social.css",
+              "v68-ui.js",
+              "platform-v69.css",
+              "index.html",
+              "native-apps.js",
+              "social.js",
+          }
 
-          extra_docs = [
-              "docs/Eaglercraft-Indev-Offline (1).html",
-              "docs/EaglercraftX 1.8.8(u29).html",
-              "docs/Helios-Offline (1).html",
-              "docs/clSuperMarioWorldThe SecretOfThe7GoldenStatues.html",
-              "docs/clhandsofwar (1).html",
+          extra_docs = {
               "docs/clhextris.html",
-              "docs/clice age baby.html",
-              "docs/climpossiblequiz (1).html",
               "docs/clmariominusrabbids.html",
               "docs/clonenightasfreddy.html",
               "docs/clsmashkarts.html",
-              "docs/clsubwaysurferssanfrancisco (1).html",
               "docs/clsuperkidadventure.htm",
               "docs/cltanukisunset.html",
-              "docs/clthelaststandunioncity (1).html",
               "docs/clthrowapotato.html",
-              "docs/cltwinshot (1).html",
               "docs/fd.html",
               "docs/shotgun-mario-64-rom.zip",
-          ]
+          }
 
           def url_for(path):
-              return base.rstrip("/") + "/" + urllib.parse.quote(path, safe="/")
+              return base + "/" + urllib.parse.quote(path, safe="/")
 
-          def fetch(path, retries=4):
+          def fetch(path, retries=5):
               dest = root / path
               dest.parent.mkdir(parents=True, exist_ok=True)
               last = None
@@ -112,9 +97,9 @@ jobs:
                   try:
                       req = urllib.request.Request(
                           url_for(path),
-                          headers={"User-Agent": "NovaMath-GitHub-Importer/1.0"},
+                          headers={"User-Agent": "NovaMath-GitHub-Importer/1.3.2"},
                       )
-                      with urllib.request.urlopen(req, timeout=90) as response:
+                      with urllib.request.urlopen(req, timeout=120) as response:
                           if response.status != 200:
                               raise RuntimeError(f"HTTP {response.status}")
                           with dest.open("wb") as out:
@@ -123,58 +108,101 @@ jobs:
                                   if not chunk:
                                       break
                                   out.write(chunk)
-                      return path
+                      return
                   except Exception as exc:
                       last = exc
                       if attempt + 1 < retries:
-                          time.sleep(1.5 * (attempt + 1))
-              raise RuntimeError(f"Failed {path}: {last}")
+                          time.sleep(2 * (attempt + 1))
+              raise RuntimeError(f"{path}: {last}")
 
-          # games.js is the canonical list of local game documents.
           fetch("games.js")
           games_text = pathlib.Path("games.js").read_text("utf-8", errors="replace")
           docs = set(re.findall(r'"file":"(docs/[^"]+)"', games_text))
           docs = {p for p in docs if p.startswith("docs/")}
+          if len(docs) != 1991:
+              raise SystemExit(f"Expected 1,991 referenced local games, found {len(docs)}")
           docs.update(extra_docs)
+          if len(docs) != 2000:
+              raise SystemExit(f"Expected 2,000 real docs files, found {len(docs)}")
 
-          if len(docs) < 1990:
-              raise SystemExit(f"Expected roughly 1,991 local game files, found {len(docs)}")
+          targets = sorted((public_files - {"games.js"}) | docs)
+          print(f"Downloading {len(targets)} remaining public files...")
 
-          targets = sorted((set(root_files) - {"games.js"}) | set(assets) | docs)
-
-          print(f"Downloading {len(targets) + 1} production files...")
           failures = []
-          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
               future_map = {pool.submit(fetch, p): p for p in targets}
-              for index, future in enumerate(concurrent.futures.as_completed(future_map), 1):
+              for i, future in enumerate(concurrent.futures.as_completed(future_map), 1):
                   path = future_map[future]
                   try:
                       future.result()
                   except Exception as exc:
                       failures.append(str(exc))
-                  if index % 100 == 0:
-                      print(f"Completed {index}/{len(targets)}")
+                  if i % 100 == 0:
+                      print(f"Completed {i}/{len(targets)}")
 
           if failures:
-              print("\n".join(failures[:30]))
+              print("\n".join(failures[:50]))
               raise SystemExit(f"{len(failures)} production downloads failed")
 
           pathlib.Path("docs/.gitkeep").touch()
           pathlib.Path("thumbs").mkdir(exist_ok=True)
           pathlib.Path("thumbs/.gitkeep").touch()
 
-          print(f"Imported {len(docs)} docs plus Nova Math static assets.")
+          actual_docs = [p for p in pathlib.Path("docs").iterdir() if p.is_file()]
+          if len(actual_docs) != 2001:
+              raise SystemExit(f"Expected 2,001 docs entries including .gitkeep, found {len(actual_docs)}")
+
+          print("Production library downloaded and verified.")
           PY
 
-      - name: Commit production library
+      - name: Apply exact v1.3.2 patch
+        shell: bash
+        run: |
+          cat .nova-import/patch.part1 .nova-import/patch.part2 .nova-import/patch.part3 .nova-import/patch.part4             | base64 -d | gunzip > /tmp/v132.patch
+          git apply --check /tmp/v132.patch
+          git apply /tmp/v132.patch
+
+          echo 'Tm92YSBNYXRoIHYxLjMuMgoKLSBTaW1wbGlmaWVkIERpc2NvcmQgZW52aXJvbm1lbnQgdmFyaWFibGUgbmFtZXMgZm9yIFZlcmNlbC4KLSBVc2UgTk9WQV9SRVBPUlRTX1dFQkhPT0sgZm9yIHByaXZhdGUgaXNzdWUgcmVwb3J0cy4KLSBVc2UgTk9WQV9BRE1JTl9BTEVSVFNfV0VCSE9PSyBmb3IgYWRtaW4gYWxlcnRzLgotIFVzZSBGT09EX1JFUVVFU1RfRElTQ09SRF9XRUJIT09LIGZvciBTbmFjayBEcm9wIG5vdGlmaWNhdGlvbnMuCi0gT2xkICpfRElTQ09SRF9XRUJIT09LIG5hbWVzIHJlbWFpbiBzdXBwb3J0ZWQgYXMgY29tcGF0aWJpbGl0eSBmYWxsYmFja3MuCi0gTm8gbmV3IFZlcmNlbCBmdW5jdGlvbnMgd2VyZSBhZGRlZC4K'             | base64 -d > NOVA-MATH-V1.3.2.txt
+
+          rm -rf .nova-import
+          rm -f README.md
+
+      - name: Validate canonical project
+        shell: bash
+        run: |
+          test -f index.html
+          test -f games.js
+          test -f sw.js
+          test -f package.json
+          test -f vercel.json
+          test -f server/vercel-bridge.mjs
+
+          FUNCTIONS=$(find api -maxdepth 1 -type f -name '*.mjs' | wc -l | tr -d ' ')
+          test "$FUNCTIONS" = "11"
+
+          DOCS=$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')
+          test "$DOCS" = "2001"
+
+          find . -maxdepth 1 -name '*.js' -print0 | xargs -0 -r -n1 node --check
+          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check
+
+          if grep -R -n -E 'BasicallyNoobYT|Basically Noob'               --exclude-dir=.git --exclude='*.zip' .; then
+            echo "Forbidden branding found"
+            exit 1
+          fi
+
+          echo "Nova Math v1.3.2 validation passed."
+
+      - name: Commit complete Nova Math v1.3.2
         shell: bash
         run: |
           git config user.name "Nova Math Importer"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+
           if git diff --cached --quiet; then
-            echo "No production files changed."
+            echo "Nova Math v1.3.2 is already current."
           else
-            git commit -m "Bootstrap Nova Math production library"
+            git commit -m "Import complete Nova Math v1.3.2 project"
             git push origin HEAD:main
           fi
