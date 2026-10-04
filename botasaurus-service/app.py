@@ -10,6 +10,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from urllib.parse import urljoin, urlparse
+from typing import Optional
 
 import requests
 from botasaurus.request import request, Request
@@ -422,7 +423,7 @@ def health():
 
 
 @app.post("/run-now")
-async def run_now(x_admin_secret: str | None = Header(default=None)):
+async def run_now(x_admin_secret: Optional[str] = Header(default=None)):
     admin_secret = env_text("BOTASAURUS_ADMIN_SECRET")
     if not admin_secret:
         raise HTTPException(status_code=404, detail="Manual run endpoint is disabled")
