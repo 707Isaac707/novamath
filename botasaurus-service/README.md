@@ -1,51 +1,119 @@
-# Nova Math Botasaurus Service
+# Nova Math Botasaurus Sports Scraper
 
-This folder contains the Botasaurus sidecar used by Nova Math sports discovery.
+This service is the automatic sports-stream scraper for Nova Math.
 
-It is intentionally excluded from the main Vercel deployment with `.vercelignore`.
-That keeps the existing Nova Math Vercel Hobby deployment at the same 11 API functions.
+It runs separately from the main Vercel deployment and pushes a complete,
+signed stream snapshot into the existing Nova Math `/api/sports-api` route.
+The main site remains at 11 Vercel API functions.
 
-## What it does
+## Flow
 
-- Runs Botasaurus in a dedicated Python/Docker service.
-- Exposes `GET /health`.
-- Exposes `GET /scrape?url=...` for allow-listed public pages.
-- Exposes `GET /sports/channels` for direct public HLS links that are visibly linked by configured public sports pages.
-- Does not inspect protected network traffic, bypass DRM, or extract private/paywalled manifests.
+1. Botasaurus scrapes the configured public/authorized sports source pages.
+2. It extracts direct HLS (`.m3u8`) URLs exposed by those pages.
+3. It validates the HLS manifests.
+4. It HMAC-signs the JSON payload.
+5. It POSTs the complete snapshot to Nova Math.
+6. The Vercel Sports API atomically overwrites the current Upstash snapshot.
+7. The Sports tab reads only the newest non-expired Botasaurus snapshot once
+   Botasaurus ingest is enabled.
 
-## Required service environment variables
+Old snapshots are never merged with new ones. If a snapshot expires, the
+Vercel API deletes it and returns no Botasaurus channels until a fresh push
+arrives.
+
+This implementation does not inspect protected browser network traffic,
+bypass DRM, defeat paywalls/login, or extract private media manifests.
+
+## Botasaurus service environment variables
+
+### Required
+
+`BOTASAURUS_INGEST_SECRET`
+
+The shared signing secret. Use the exact same value in this service and in the
+Nova Math Vercel project.
 
 `BOTASAURUS_ALLOWED_HOSTS`
-- Comma-separated hostnames the scraper is allowed to visit.
-- Example: `example.org,stream.example.org`
+
+Comma-separated allow-list of hosts the scraper may visit.
+
+Example:
+
+```text
+example.org,streams.example.org
+```
 
 `BOTASAURUS_SPORTS_SOURCE_URLS`
-- Comma-separated public sports pages Botasaurus should inspect.
-- Every source must belong to a hostname listed in `BOTASAURUS_ALLOWED_HOSTS`.
 
-## Run with Docker
+Comma- or newline-separated source pages. A source can optionally have a label:
+
+```text
+Example Sports|https://example.org/live
+https://streams.example.org/sports
+```
+
+### Recommended
+
+`NOVA_SPORTS_INGEST_URL`
+
+Default:
+
+```text
+https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest
+```
+
+`BOTASAURUS_INTERVAL_SECONDS`
+
+Default: `300`
+
+`BOTASAURUS_SNAPSHOT_TTL_SECONDS`
+
+Default: `900`
+
+`BOTASAURUS_VALIDATE_STREAMS`
+
+Default: `1`
+
+`BOTASAURUS_MAX_STREAMS`
+
+Default: `300`
+
+### Optional manual-run endpoint
+
+`BOTASAURUS_ADMIN_SECRET`
+
+When set, this enables:
+
+```text
+POST /run-now
+X-Admin-Secret: <BOTASAURUS_ADMIN_SECRET>
+```
+
+## Vercel environment variable
+
+Add this to the existing Nova Math Vercel project:
+
+`BOTASAURUS_INGEST_SECRET`
+
+Do not add a new Vercel function. The receiver is implemented inside the
+existing `api/sports-api.mjs` -> `server/functions/sports-api.cjs` route.
+
+## Docker
 
 ```bash
 docker build -t nova-botasaurus .
 docker run --rm -p 8000:8000 \
+  -e BOTASAURUS_INGEST_SECRET="replace-with-a-long-random-secret" \
   -e BOTASAURUS_ALLOWED_HOSTS="example.org" \
-  -e BOTASAURUS_SPORTS_SOURCE_URLS="https://example.org/sports" \
+  -e BOTASAURUS_SPORTS_SOURCE_URLS="https://example.org/live" \
   nova-botasaurus
 ```
 
-Then check:
+Health endpoint:
 
 ```text
-http://localhost:8000/health
-http://localhost:8000/sports/channels
+GET /health
 ```
 
-## Connect it to Nova Math
-
-Host this Docker service on a container/VM provider and set this environment variable
-on the existing Nova Math Vercel project:
-
-`BOTASAURUS_API_URL=https://your-botasaurus-service.example`
-
-The existing `/api/sports-api` endpoint will merge Botasaurus channels with the
-current public IPTV sources, so no additional Vercel serverless function is required.
+The scheduler runs immediately after startup and then repeats at the configured
+interval.
