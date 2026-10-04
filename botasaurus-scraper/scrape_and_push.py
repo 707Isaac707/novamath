@@ -10,9 +10,18 @@ import uuid
 from urllib.parse import urljoin, urlparse
 
 import requests
-from botasaurus.request import request, Request
-from botasaurus.soupify import soupify
+from bs4 import BeautifulSoup
 from seleniumbase import Driver
+
+try:
+    from botasaurus.request import request, Request
+    BOTASAURUS_AVAILABLE = True
+    BOTASAURUS_IMPORT_ERROR = ""
+except Exception as exc:
+    request = None
+    Request = object
+    BOTASAURUS_AVAILABLE = False
+    BOTASAURUS_IMPORT_ERROR = str(exc)
 
 
 DEFAULT_INGEST_URL = "https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest"
@@ -376,7 +385,7 @@ def page_logo(soup, base_url):
 
 def parse_html(response, source):
     raw_html = str(getattr(response, "text", "") or "")
-    soup = soupify(response)
+    soup = BeautifulSoup(raw_html, "html.parser")
     title = clean_text(
         soup.title.get_text(" ", strip=True) if getattr(soup, "title", None) else source["name"],
         160,
@@ -424,9 +433,7 @@ def parse_html(response, source):
     return rows
 
 
-@request(max_retry=2)
-def scrape_source(http: Request, source):
-    response = http.get(source["url"])
+def parse_source_response(response, source):
     status = int(getattr(response, "status_code", 200) or 200)
     if status >= 400:
         raise RuntimeError("source returned HTTP %s" % status)
@@ -441,10 +448,44 @@ def scrape_source(http: Request, source):
     else:
         channels = parse_html(response, source)
 
-    return {
-        "source": source,
-        "channels": channels,
-    }
+    return {"source": source, "channels": channels}
+
+
+if BOTASAURUS_AVAILABLE:
+    @request(max_retry=2)
+    def scrape_source_botasaurus(http: Request, source):
+        return parse_source_response(http.get(source["url"]), source)
+else:
+    scrape_source_botasaurus = None
+
+
+def scrape_source(source):
+    if scrape_source_botasaurus is not None:
+        try:
+            return scrape_source_botasaurus(source)
+        except Exception as exc:
+            print(
+                "[botasaurus] fetch failed, using requests fallback for %s: %s"
+                % (source["name"], clean_text(exc, 160)),
+                flush=True,
+            )
+    elif BOTASAURUS_IMPORT_ERROR:
+        print(
+            "[botasaurus] unavailable this run; using requests fallback: %s"
+            % clean_text(BOTASAURUS_IMPORT_ERROR, 160),
+            flush=True,
+        )
+
+    response = requests.get(
+        source["url"],
+        headers={
+            "User-Agent": "Mozilla/5.0 (Nova Math public stream indexer)",
+            "Accept": "application/vnd.apple.mpegurl,application/x-mpegURL,application/json,text/html,text/plain,*/*",
+        },
+        timeout=(5, 15),
+        allow_redirects=True,
+    )
+    return parse_source_response(response, source)
 
 
 def extract_hls_from_resource_urls(resource_urls, source):
