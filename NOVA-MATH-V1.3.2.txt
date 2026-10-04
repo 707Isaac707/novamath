@@ -1,0 +1,8 @@
+Nova Math v1.3.2
+
+- Simplified Discord environment variable names for Vercel.
+- Use NOVA_REPORTS_WEBHOOK for private issue reports.
+- Use NOVA_ADMIN_ALERTS_WEBHOOK for admin alerts.
+- Use FOOD_REQUEST_DISCORD_WEBHOOK for Snack Drop notifications.
+- Old *_DISCORD_WEBHOOK names remain supported as compatibility fallbacks.
+- No new Vercel functions were added.

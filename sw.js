@@ -1,5 +1,5 @@
-const SHELL='novamath-shell-v1-2-hobby-1';
-const GAMES='novamath-games-v1-2';
+const SHELL='novamath-shell-v1-3-2-hobby-1';
+const GAMES='novamath-games-v1-3-2';
 const SHELL_FILES=['/','/index.html','/style.css','/enhancements.css','/social.css','/watch-party.css','/platform.css','/platform-v69.css','/sports-v69.css','/enhancements.js','/social.js','/watch-party.js','/platform-v69.js','/sports-v69.js','/native-apps.css','/native-apps.js','/v68-ui.css','/v68-ui.js','/v70-chromebook.css','/nova-v1.css','/nova-v1.js','/assets/nova-logo.png','/assets/secret-6753.jpg','/assets/vine-boom.wav','/games.js','/app-icon-192.png','/app-icon-512.png','/manifest.webmanifest','/apps/choices-voices-packs.html','/assets/retro-bowl-hero.mp4','/assets/retro-bowl-hero-poster.jpg'];
 
 self.addEventListener('install',event=>event.waitUntil(

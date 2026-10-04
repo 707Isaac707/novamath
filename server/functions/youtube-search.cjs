@@ -45,4 +45,17 @@ exports.handler = async function(event) {
       .map(item => ({
         id: item.id.videoId,
         title: item.snippet?.title || 'YouTube video',
-     ¶»§q«^
+        channelTitle: item.snippet?.channelTitle || 'YouTube',
+        thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ''
+      }));
+
+    return { statusCode: 200, headers, body: JSON.stringify({ items }) };
+  } catch (error) {
+    console.error('youtube-search error', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'YouTube search failed on the server.' })
+    };
+  }
+};

@@ -37,4 +37,30 @@ function getStore(storeName){
     },
     async set(key,value){
       const redis=await redisClient();
-      const out=Buffe¶»§q«^
+      const out=Buffer.isBuffer(value)?value.toString('base64'):String(value??'');
+      await redis.set(scoped(name,key),out);
+    },
+    async delete(key){
+      const redis=await redisClient();
+      await redis.del(scoped(name,key));
+    },
+    async list(options={}){
+      const redis=await redisClient();
+      const prefix=String(options?.prefix||'');
+      const pattern=scoped(name,prefix)+'*';
+      let cursor=0;
+      const keys=[];
+      do{
+        const result=await redis.scan(cursor,{match:pattern,count:500});
+        cursor=Number(result?.[0]||0);
+        const batch=Array.isArray(result?.[1])?result[1]:[];
+        keys.push(...batch);
+      }while(cursor!==0&&keys.length<5000);
+      keys.sort();
+      const blobs=keys.map(k=>({key:unscoped(name,k)}));
+      return {blobs,b:blobs,directories:[]};
+    }
+  };
+}
+
+module.exports={getStore};

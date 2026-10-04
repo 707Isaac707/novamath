@@ -1,41 +1,51 @@
-NOVA MATH v1.2 - VERCEL ENVIRONMENT VARIABLES
+NOVA MATH v1.3.2 - VERCEL ENVIRONMENT VARIABLES
 
 REQUIRED FOR ACCOUNTS
 MEDIAHUB_AUTH_SECRET
 - Required for username/password accounts and signed sessions.
 - Keep the same value after accounts are created.
-- Legacy alias SOCIAL_AUTH_SECRET is still accepted.
 
-REQUIRED STORAGE INTEGRATION
-Upstash Redis through the Vercel Marketplace
-- The integration supplies Redis credentials automatically.
-- Supported credential pairs are KV_REST_API_URL + KV_REST_API_TOKEN or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
-- Do not manually expose these values to frontend JavaScript.
-
-OPTIONAL FEATURES
 MEDIAHUB_ADMIN_USERNAME
-- Nova Math username allowed to open the private Admin Dashboard.
+- Set this to the exact Nova Math account username that should have admin access.
+- This is a Nova Math username, not your Vercel or Discord username.
+- Matching is case-insensitive. Redeploy after changing it.
 
-OPENROUTER_API_KEY
-- Required only for the Assistant app.
-- Keep this variable name exactly as written.
+REQUIRED STORAGE
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+- Nova also accepts KV_REST_API_URL + KV_REST_API_TOKEN instead.
+- Use one credential pair, not both.
 
-FOOD_REQUEST_DISCORD_WEBHOOK
-- Optional. Sends new Snack Drop order notifications to Discord.
+NOVA AI / UNOROUTER
+UNOROUTER_API_KEY
+- Required for Nova AI. Keep the key private.
 
+UNOROUTER_MODEL
+- Optional primary model. Recommended current free primary: space-bunny-alpha:free
+
+UNOROUTER_FALLBACK_MODELS
+- Optional comma-separated fallback model IDs.
+- If omitted, Nova uses built-in free fallbacks.
+
+OPTIONAL MEDIA / ART
 YOUTUBE_API_KEY
-- Optional. Enables YouTube-powered search/features used by the build.
-
 STEAMGRIDDB_API_KEY
-- Optional. Enables SteamGridDB artwork lookup.
 
-PROXY BROWSER
-- No Vercel environment variables are required.
-- Nova Math uses the existing Scramjet defaults directly:
-  https://mediahub-proxy.onrender.com
-  wss://mediahub-proxy.onrender.com/wisp/
-- Jellyfin configuration has been removed from Nova Math v1.2.
+DISCORD
+FOOD_REQUEST_DISCORD_WEBHOOK
+- Snack Drop notifications.
 
-SPORTS
-- No sports API key is required.
-- ESPN site scoreboards are requested through /api/sports-api with a direct browser fallback for scoreboards.
+NOVA_REPORTS_WEBHOOK
+- Private user issue and broken-item reports.
+- Recommended target: your private #request-log or reports channel.
+
+NOVA_ADMIN_ALERTS_WEBHOOK
+- Private admin alerts and webhook test messages.
+- If NOVA_REPORTS_WEBHOOK is not set, issue reports fall back to this webhook.
+
+PROXY / BROWSER
+- No JELLYFIN_BRIDGE_URL, SCRAMJET_BROWSER_URL, or WISP_URL variables are required.
+- The existing browser/proxy uses its built-in defaults.
+
+VERCEL HOBBY
+- Nova Math v1.3.2 keeps the same 11 /api functions. No new serverless function was added.

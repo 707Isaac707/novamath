@@ -36,4 +36,61 @@ function parseM3u(text='',source='playlist'){
       };
       continue;
     }
-    if(line.startsWith('#EXTGRP:')&&pending){pending.group=cleanName(line.slice(8))||pending.group;con¶»§q«^
+    if(line.startsWith('#EXTGRP:')&&pending){pending.group=cleanName(line.slice(8))||pending.group;continue;}
+    if(line.startsWith('#'))continue;
+    if(/^https?:\/\//i.test(line)){
+      const meta=pending||{name:'Live Channel',group:'Live TV',logo:'',tvgId:''};
+      channels.push({...meta,url:line,source});
+      pending=null;
+    }
+  }
+  const seen=new Set();
+  return channels.filter(c=>{const key=c.url;if(!key||seen.has(key))return false;seen.add(key);return true;});
+}
+
+async function fetchPlaylist(entry){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),10000);
+  try{
+    const r=await fetch(entry.url,{redirect:'follow',signal:controller.signal,headers:{'User-Agent':'MediaHub/1.0','Accept':'audio/x-mpegurl,application/vnd.apple.mpegurl,application/text,text/plain,*/*'}});
+    const text=await r.text();
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const channels=parseM3u(text,entry.source);
+    if(!channels.length)throw new Error('no channels returned');
+    return {ok:true,label:entry.label,url:entry.url,channels};
+  }catch(error){
+    return {ok:false,label:entry.label,url:entry.url,error:String(error?.message||error||'playlist error')};
+  }finally{clearTimeout(timer);}
+}
+
+exports.handler=async()=>{
+  try{
+    if(memoryCache.payload&&Date.now()-memoryCache.at<CACHE_MS){
+      return {statusCode:200,headers,body:JSON.stringify(memoryCache.payload)};
+    }
+    const results=await Promise.all(PLAYLISTS.map(fetchPlaylist));
+    const good=results.filter(r=>r.ok);
+    if(!good.length)throw new Error(results.map(r=>`${r.label}: ${r.error}`).join('; ')||'all playlists failed');
+
+    const seen=new Set();
+    const channels=[];
+    for(const result of good){
+      for(const c of result.channels){
+        if(!c.url||seen.has(c.url))continue;
+        seen.add(c.url);
+        channels.push(c);
+      }
+    }
+    const payload={
+      source:good.map(r=>r.label).join(' + '),
+      playlists:results.map(r=>({label:r.label,url:r.url,ok:r.ok,count:r.ok?r.channels.length:0,error:r.ok?undefined:r.error})),
+      channels,
+      fetchedAt:new Date().toISOString()
+    };
+    memoryCache={at:Date.now(),payload};
+    return {statusCode:200,headers,body:JSON.stringify(payload)};
+  }catch(error){
+    console.error('iptv-playlist error',error);
+    return {statusCode:502,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'Could not load the configured IPTV playlists right now.'})};
+  }
+};

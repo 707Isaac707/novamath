@@ -1,25 +1,31 @@
-NOVA MATH v1.2 - VERCEL HOBBY EDITION
+NOVA MATH v1.3.2 - VERCEL HOBBY EDITION
 
-This archive is structured specifically for https://vercel.com/drop.
+This archive is a complete Nova Math project.
 index.html is at the ZIP root and Vercel Functions are in /api.
 
+USE YOUR EXISTING PROJECT
+- Vercel project: novamath
+- Current production domain: totallynovamath.duckdns.org
+- Do not create a new Nova Math project unless you intentionally want a separate deployment.
+
 DEPLOY
-1. Open https://vercel.com/drop in Safari or Chrome.
-2. Upload this ZIP as-is. Do not unzip it first.
-3. Choose the Math team.
-4. Name the project novamath-v1-1 (or another unused name).
-5. Deploy.
+1. Open the existing novamath project in Vercel.
+2. Deploy/upload this complete project as the next production version using your normal Vercel workflow.
+3. Confirm the deployment is Production.
+4. Existing domains attached to novamath will follow the new production deployment automatically.
 
-AFTER THE FIRST DEPLOY
-1. Open the project in Vercel.
-2. Connect an Upstash Redis database from Marketplace / Storage.
-3. Add MEDIAHUB_AUTH_SECRET in Settings > Environment Variables.
-4. Add optional variables from ENVIRONMENT-VARIABLES.txt.
-5. Redeploy once after storage/environment changes.
+ENVIRONMENT
+See ENVIRONMENT-VARIABLES.txt.
+Important v1.3.2 additions:
+- NOVA_REPORTS_WEBHOOK
+- NOVA_ADMIN_ALERTS_WEBHOOK
 
-The Scramjet backend remains hosted separately on Render.
+MEDIAHUB_ADMIN_USERNAME must match the username of the Nova Math account you want to use as admin.
+
+AFTER ENVIRONMENT VARIABLE CHANGES
+Redeploy once so the new production deployment receives the variables.
 
 HOBBY PLAN
-- This build uses 11 deployable /api functions, below Vercel Hobby's 12-function limit.
-- Jellyfin configuration was removed.
-- The Scramjet browser uses its existing Render defaults directly, with no proxy environment variables required.
+- This build keeps 11 deployable /api functions, below the 12-function limit.
+- No new function was added for reports or admin alerts. They use the existing platform API.
+- The browser/proxy keeps its existing built-in backend defaults.
