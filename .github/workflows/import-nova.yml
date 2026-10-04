@@ -34,10 +34,14 @@ jobs:
           tar -tzf /tmp/nova-source.tar.gz
           tar -xzf /tmp/nova-source.tar.gz -C .
 
-      - name: Apply exact public v1.3.2 changes
+      - name: Apply exact full v1.3.2 patch
         shell: bash
         run: |
-          cat .nova-import/patch.part1               .nova-import/patch.part2               .nova-import/patch.part3               .nova-import/patch.part4             | base64 -d | gunzip > /tmp/all-v132.patch
+          cat .nova-import/patch.part1 \
+              .nova-import/patch.part2 \
+              .nova-import/patch.part3 \
+              .nova-import/patch.part4 \
+            | base64 -d | gunzip > /tmp/all-v132.patch
 
           python3 - <<'PY'
           from pathlib import Path
@@ -45,37 +49,18 @@ jobs:
 
           p = Path("/tmp/all-v132.patch")
           text = p.read_text()
-
-          # v1.2 index.html had no final newline, causing the next diff header
-          # to be attached to </html>. Restore that separator.
-          text = re.sub(r"(?<!\n)(--- a/)", r"\n\1", text)
-
-          selected = {
-              "enhancements.js",
-              "index.html",
-              "nova-v1.css",
-              "platform-v69.js",
-              "sw.js",
-          }
-
-          sections = re.split(r"(?=^--- a/)", text, flags=re.M)
-          kept = []
-          for section in sections:
-              if not section.startswith("--- a/"):
-                  continue
-              first = section.splitlines()[0]
-              path = first[len("--- a/"):]
-              if path in selected:
-                  kept.append(section)
-
-          if len(kept) != len(selected):
-              found = [s.splitlines()[0] for s in kept]
-              raise SystemExit(f"Expected {len(selected)} public patch sections, found {len(kept)}: {found}")
-
-          Path("/tmp/public-v132.patch").write_text("".join(kept))
+          # v1.2 index.html had no final newline, so the next diff header was
+          # attached to </html>. Restore the missing separator.
+          text = re.sub(r"(?<!\\n)(--- a/)", r"\\n\\1", text)
+          p.write_text(text)
           PY
 
-          patch --batch --forward -p1 < /tmp/public-v132.patch
+          # GNU patch correctly handles the v1.2 index.html no-final-newline
+          # hunk (with fuzz 1) after the separator repair above.
+          patch --batch --forward -p1 < /tmp/all-v132.patch
+
+          echo 'Tm92YSBNYXRoIHYxLjMuMgoKLSBTaW1wbGlmaWVkIERpc2NvcmQgZW52aXJvbm1lbnQgdmFyaWFibGUgbmFtZXMgZm9yIFZlcmNlbC4KLSBVc2UgTk9WQV9SRVBPUlRTX1dFQkhPT0sgZm9yIHByaXZhdGUgaXNzdWUgcmVwb3J0cy4KLSBVc2UgTk9WQV9BRE1JTl9BTEVSVFNfV0VCSE9PSyBmb3IgYWRtaW4gYWxlcnRzLgotIFVzZSBGT09EX1JFUVVFU1RfRElTQ09SRF9XRUJIT09LIGZvciBTbmFjayBEcm9wIG5vdGlmaWNhdGlvbnMuCi0gT2xkICpfRElTQ09SRF9XRUJIT09LIG5hbWVzIHJlbWFpbiBzdXBwb3J0ZWQgYXMgY29tcGF0aWJpbGl0eSBmYWxsYmFja3MuCi0gTm8gbmV3IFZlcmNlbCBmdW5jdGlvbnMgd2VyZSBhZGRlZC4K' \
+            | base64 -d > NOVA-MATH-V1.3.2.txt
 
       - name: Remove temporary import files
         shell: bash
