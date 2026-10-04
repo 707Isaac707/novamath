@@ -43,13 +43,13 @@ function mount(){
           <div class="mh-sports-card-head"><div><small>PUBLIC SPORTS TV</small><h3 id="mhSportsNowTitle">Sports Channels</h3></div><button id="mhSportsPip" title="Picture in Picture">PiP</button></div>
           <div class="mh-sports-video-shell"><video id="mhSportsVideo" controls playsinline webkit-playsinline></video><div id="mhSportsVideoEmpty"><span>▶</span><strong>Pick a channel</strong><small>Only public playlist sources are loaded here.</small></div></div>
           <div class="mh-sports-player-actions"><button id="mhSportsFullscreen">Fullscreen</button><button id="mhSportsStop">Stop</button></div>
-          <div id="mhSportsPlayerStatus" class="mh-sports-status">Loading IPTV-org and IPTV Cat sports channels…</div>
+          <div id="mhSportsPlayerStatus" class="mh-sports-status">Loading fresh sports streams…</div>
         </section>
       </aside>
     </div>
     <section class="mh-sports-card mh-sports-channels-card">
       <div class="mh-sports-card-head"><div><small>SPORTS CHANNELS</small><h3>Watch</h3></div><div class="mh-sports-channel-tools"><input id="mhSportsChannelSearch" type="search" placeholder="Search channels"><button id="mhSportsFavOnly">★ Favorites</button></div></div>
-      <div id="mhSportsChannels" class="mh-sports-channels"><div class="mh-sports-loading">Loading public sports playlist…</div></div>
+      <div id="mhSportsChannels" class="mh-sports-channels"><div class="mh-sports-loading">Loading fresh sports streams…</div></div>
     </section>
   </section>`;
     renderLeagues();
@@ -88,7 +88,7 @@ function stopChannel(){try{channelHls?.destroy()}catch{}channelHls=null;const v=
 function playChannel(c){if(!c?.url)return;stopChannel();currentChannel=c;const v=$('#mhSportsVideo'),empty=$('#mhSportsVideoEmpty');if(!v)return;empty.hidden=true;$('#mhSportsNowTitle').textContent=c.name;$('#mhSportsPlayerStatus').textContent='Connecting to '+c.name+'…';const u=c.url,isHls=/\.m3u8(?:$|\?)/i.test(u)||/m3u8/i.test(u);try{if(isHls&&v.canPlayType('application/vnd.apple.mpegurl')){v.src=u;v.play().catch(()=>{});}else if(isHls&&window.Hls?.isSupported()){channelHls=new Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:20});channelHls.loadSource(u);channelHls.attachMedia(v);channelHls.on(Hls.Events.MANIFEST_PARSED,()=>v.play().catch(()=>{}));channelHls.on(Hls.Events.ERROR,(_,data)=>{if(data?.fatal)$('#mhSportsPlayerStatus').textContent='This public channel is not playing right now.';});}else{v.src=u;v.play().catch(()=>{});}$('#mhSportsPlayerStatus').textContent='Playing '+c.name+'. Availability depends on the broadcaster.';window.mhAwardXP?.(3,'Watched sports',`sports:${c.tvgId||c.name}`);}catch{$('#mhSportsPlayerStatus').textContent='Could not start this channel.';}}
 async function fullscreen(){const shell=$('.mh-sports-video-shell'),v=$('#mhSportsVideo');try{if(document.fullscreenElement)return document.exitFullscreen();if(shell?.requestFullscreen)return shell.requestFullscreen();v?.webkitEnterFullscreen?.();}catch{}}
 async function pip(){const v=$('#mhSportsVideo');try{if(document.pictureInPictureElement)return document.exitPictureInPicture();if(v?.requestPictureInPicture)return v.requestPictureInPicture();}catch{toast('Picture-in-Picture is unavailable','⚠')}}
-function startRefresh(){clearInterval(scoreTimer);scoreTimer=setInterval(()=>{if(document.body.dataset.hubTab==='sports'){loadScores();loadRedZone();}},30000);}
+function startRefresh(){clearInterval(scoreTimer);scoreTimer=setInterval(()=>{if(document.body.dataset.hubTab==='sports'){loadScores();loadRedZone();loadChannels();}},30000);}
 function search(q){q=String(q||'').trim().toLowerCase();const out=[];if(!q)return out;for(const [id,label] of LEAGUES)if(label.toLowerCase().includes(q))out.push({icon:'🏟️',title:label+' Sports',subtitle:'Scores, schedules and live sports',run:()=>{activeLeague=id;window.switchTab?.('sports',document.querySelector('[data-tab="sports"]'));setTimeout(()=>{renderLeagues();loadScores(true)},120)}});for(const c of channels.filter(c=>`${c.name} ${c.group||''}`.toLowerCase().includes(q)).slice(0,5))out.push({icon:'📡',title:c.name,subtitle:c.group||'Sports channel',run:()=>{window.switchTab?.('sports',document.querySelector('[data-tab="sports"]'));setTimeout(()=>playChannel(c),180)}});return out.slice(0,8);}
 window.mountSportsTab=mount;window.mhSportsRefresh=()=>loadScores(true);window.mhSportsSearch=search;window.mhSportsOpenGame=openGame;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{if(document.body.dataset.hubTab==='sports')mount()});
