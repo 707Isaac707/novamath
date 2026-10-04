@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from botasaurus.request import request, Request
 from botasaurus.soupify import soupify
+from seleniumbase import Driver
 
 
 DEFAULT_INGEST_URL = "https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest"
@@ -54,6 +55,30 @@ def env_bool(name, default=False):
 
 def clean_text(value, limit=160):
     return " ".join(str(value or "").split())[:limit]
+
+
+def parse_labeled_urls_env(name):
+    raw = env_text(name)
+    if not raw:
+        return []
+    rows = []
+    for item in [x.strip() for x in re.split(r"[\n,]+", raw) if x.strip()]:
+        label = ""
+        url = item
+        if "|" in item:
+            left, right = item.split("|", 1)
+            if right.strip().lower().startswith(("http://", "https://")):
+                label, url = left.strip(), right.strip()
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            continue
+        rows.append({
+            "name": clean_text(label or parsed.hostname, 120),
+            "url": url[:1200],
+        })
+        if len(rows) >= 20:
+            break
+    return rows
 
 
 def parse_sources():
@@ -348,6 +373,94 @@ def scrape_source(http: Request, source):
     }
 
 
+def extract_hls_from_rendered_html(rendered_html, source):
+    html_text = str(rendered_html or "")
+    normalized = html_text.replace("\\/", "/").replace("\\u0026", "&").replace("\\u003d", "=")
+    rows = []
+    seen = set()
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", normalized, re.IGNORECASE | re.DOTALL)
+    title = clean_text(re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else source["name"], 120)
+
+    for stream_url in HLS_RE.findall(normalized):
+        url = normalize_stream_url(stream_url, source["url"])
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        rows.append({
+            "name": title or source["name"],
+            "url": url,
+            "logo": "",
+            "group": source["name"],
+            "country": "",
+            "language": "",
+            "tvgId": "",
+            "sourcePage": source["url"],
+            "source": "seleniumbase-public-page",
+        })
+    return rows
+
+
+def scrape_seleniumbase_sources():
+    sources = parse_labeled_urls_env("SELENIUMBASE_SPORTS_SOURCE_URLS")
+    if not sources:
+        return [], [], []
+
+    channels = []
+    stats = []
+    errors = []
+    wait_seconds = env_int("SELENIUMBASE_RENDER_WAIT_SECONDS", 3, 1, 8)
+
+    driver = None
+    try:
+        driver = Driver(browser="chrome", headless=True)
+        try:
+            driver.set_page_load_timeout(18)
+        except Exception:
+            pass
+
+        for source in sources:
+            try:
+                driver.get(source["url"])
+                time.sleep(wait_seconds)
+                rendered = driver.get_page_source()
+                rows = extract_hls_from_rendered_html(rendered, source)
+                channels.extend(rows)
+                stats.append({
+                    "name": "SeleniumBase: " + source["name"],
+                    "url": source["url"],
+                    "count": len(rows),
+                })
+                print(
+                    "[seleniumbase] %s: %s rendered HLS candidates"
+                    % (source["name"], len(rows)),
+                    flush=True,
+                )
+            except Exception as exc:
+                errors.append({
+                    "url": source["url"],
+                    "error": "SeleniumBase: " + clean_text(exc, 160),
+                })
+                print(
+                    "[seleniumbase] %s failed: %s"
+                    % (source["name"], clean_text(exc, 160)),
+                    flush=True,
+                )
+    except Exception as exc:
+        errors.append({
+            "url": "seleniumbase://startup",
+            "error": clean_text(exc, 180),
+        })
+        print("[seleniumbase] startup failed: %s" % clean_text(exc, 180), flush=True)
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+    return channels, stats, errors
+
+
 def validate_hls(channel):
     if not env_bool("BOTASAURUS_VALIDATE_STREAMS", True):
         return channel, ""
@@ -475,9 +588,14 @@ def main():
             errors.append({"url": source["url"], "error": clean_text(exc, 180)})
             print("[source] %s failed: %s" % (source["name"], clean_text(exc, 180)), flush=True)
 
+    selenium_channels, selenium_stats, selenium_errors = scrape_seleniumbase_sources()
+    all_channels.extend(selenium_channels)
+    source_stats.extend(selenium_stats)
+    errors.extend(selenium_errors)
+
     candidates = dedupe(all_channels)
     if not candidates:
-        raise RuntimeError("Botasaurus found no HLS candidates; current Vercel snapshot was left untouched")
+        raise RuntimeError("No HLS candidates were found; current Vercel snapshot was left untouched")
 
     workers = env_int("BOTASAURUS_VALIDATION_WORKERS", 48, 1, 64)
     valid = []
