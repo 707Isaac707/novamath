@@ -52,6 +52,8 @@ jobs:
         env:
           BOTASAURUS_INGEST_SECRET: ${{ secrets.BOTASAURUS_INGEST_SECRET }}
           BOTASAURUS_SPORTS_SOURCE_URLS: ${{ vars.BOTASAURUS_SPORTS_SOURCE_URLS }}
+          SELENIUMBASE_SPORTS_SOURCE_URLS: ${{ vars.SELENIUMBASE_SPORTS_SOURCE_URLS }}
+          SELENIUMBASE_RENDER_WAIT_SECONDS: "3"
           NOVA_SPORTS_INGEST_URL: https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest
           BOTASAURUS_VALIDATE_STREAMS: "1"
           BOTASAURUS_VALIDATION_WORKERS: "48"
