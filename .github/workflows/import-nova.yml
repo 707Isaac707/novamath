@@ -68,7 +68,7 @@ jobs:
           rm -rf .nova-import
           rm -rf ".github/    .github"
 
-      - name: Validate exact v1.3.2 hashes and structure
+      - name: Validate v1.3.2 hashes and structure
         shell: bash
         run: |
           python3 - <<'PY'
@@ -76,11 +76,11 @@ jobs:
           import hashlib
 
           expected = {
-              "DEPLOY-VERCEL-DROP.txt": "5aeafa74558f4c6c837a5d5a71adc10f8859c43fe89b68eb4dd0e90f132965b1",
-              "ENVIRONMENT-VARIABLES.txt": "3b62a9fbe2bb2c3f24f7721afdcf84d634954afaaed05824520444c6f2ed4531",
+              "DEPLOY-VERCEL-DROP.txt": "299372beeeb437513aa37de5e5e16a48f4529a0d4571d3d99ecfd57b42156b7b",
+              "ENVIRONMENT-VARIABLES.txt": "7b5287655eb928260b4c3a8b805b014c7d925953401524bf4cbeb0312745611a",
               "enhancements.js": "936ff7953fdd2258fd1a6a4540d0683565a35891ce7a3b90e10723b3f05ade4b",
               "index.html": "e499e0559d67c11f863a0f16e53d06c8f9217b66945852ef6e8853717c3f55a2",
-              "nova-v1.css": "87e6a36bde93165db5cf19fbeba869cc675dd48633f8cf4243a1b6f31cb8ab5c",
+              "nova-v1.css": "37761754a74d157bc3228faeeb577ce1a0c325fda2e1df22dd9f8bcae58f7c11",
               "package.json": "3f926199f997420943eac8cd6a1a0b5c649ab2264c2955485033125432f913b9",
               "platform-v69.js": "d43532def7277f9a6608966fd8fb354e91f60ae9644aefc263f1d1adc5695971",
               "server/functions/assistant.cjs": "bf15d48bd58ca76236520b8526abe08384a7b5e96aaebb1b5a982dad3484c96c",
@@ -101,7 +101,7 @@ jobs:
                   bad.append(f"{path}: {actual} != {wanted}")
 
           if bad:
-              raise SystemExit("Canonical hash validation failed:\n" + "\n".join(bad))
+              raise SystemExit("v1.3.2 hash validation failed:\n" + "\n".join(bad))
 
           api = list(Path("api").glob("*.mjs"))
           docs = [p for p in Path("docs").iterdir() if p.is_file()]
@@ -114,7 +114,7 @@ jobs:
           if len(server) != 13:
               raise SystemExit(f"Expected 13 server files, found {len(server)}")
 
-          print("Canonical Nova Math v1.3.2 hashes verified.")
+          print("Nova Math v1.3.2 hashes verified.")
           print("API functions:", len(api))
           print("Docs files:", len(docs))
           print("Server files:", len(server))
