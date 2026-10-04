@@ -47,12 +47,19 @@ PROXY / BROWSER
 - No JELLYFIN_BRIDGE_URL, SCRAMJET_BROWSER_URL, or WISP_URL variables are required.
 - The existing browser/proxy uses its built-in defaults.
 
-OPTIONAL BOTASAURUS SPORTS DISCOVERY
-BOTASAURUS_API_URL
-- Base URL of the separately hosted Botasaurus Docker service.
-- Example format: https://your-botasaurus-service.example
-- The existing /api/sports-api function calls /sports/channels on this service.
-- Leaving it unset keeps the existing IPTV-org + IPTV Cat behavior.
+BOTASAURUS SPORTS INGEST
+BOTASAURUS_INGEST_SECRET
+- Shared HMAC secret used by the scheduled GitHub Botasaurus scraper.
+- Set the exact same secret in Vercel and in the GitHub repository Actions secret named BOTASAURUS_INGEST_SECRET.
+- Before the first successful Botasaurus push, Nova keeps the existing IPTV fallback.
+- After the first successful push, Botasaurus becomes the authoritative Sports stream source.
+- Expired Botasaurus snapshots are removed instead of falling back to old streams.
+
+GITHUB BOTASAURUS SCRAPER
+- Workflow: .github/workflows/botasaurus-sports.yml
+- Runs every 5 minutes and can also be run manually.
+- Optional repository variable BOTASAURUS_SPORTS_SOURCE_URLS overrides the built-in public source list.
+- The scraper validates HLS manifests before replacing the Upstash snapshot.
 
 VERCEL HOBBY
 - Nova Math v1.3.2 keeps the same 11 /api functions. No new serverless function was added.
