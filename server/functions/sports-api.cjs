@@ -175,8 +175,9 @@ function gameDetails(summary,leagueKey){
       if(athletes.length)leaders.push({name:txt(group.displayName||group.name,60),labels:(group.labels||[]).map(x=>txt(x,20)).slice(0,12),athletes});
     }
   }
+  const broadcasts=(h.broadcasts||[]).flatMap(x=>x.names||[]).map(x=>txt(x,60)).filter(Boolean).slice(0,8);
   return {
-    teams,
+    teams,broadcasts,
     status:{state:txt(status.type?.state,12),detail:txt(status.type?.shortDetail||status.type?.detail||status.type?.description,100),clock:txt(status.displayClock,20),period:Number(status.period||0),completed:!!status.type?.completed},
     scoring,leaders:leaders.slice(0,14),fantasy:leagueKey==='nfl'?fantasyRows(summary):[],
     fantasyScoring:'Estimate: 4 points per passing TD, 0.04 per passing yard, 6 per rushing or receiving TD, 0.1 per rushing or receiving yard, -2 per interception, -2 per lost fumble. Average is the mean of Standard, Half-PPR, and PPR.',
