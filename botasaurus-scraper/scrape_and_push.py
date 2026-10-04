@@ -94,6 +94,24 @@ def normalize_stream_url(value, base_url=""):
     return value[:1600]
 
 
+def extinf_title(line):
+    in_quote = False
+    escaped = False
+    for index, char in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == '"':
+            in_quote = not in_quote
+            continue
+        if char == "," and not in_quote:
+            return clean_text(line[index + 1:], 120)
+    return "Sports Stream"
+
+
 def parse_m3u(raw, source):
     rows = []
     meta = None
@@ -104,9 +122,8 @@ def parse_m3u(raw, source):
             continue
 
         if line.startswith("#EXTINF:"):
-            comma = line.find(",")
             meta = {
-                "name": clean_text(line[comma + 1:] if comma >= 0 else "Sports Stream", 120),
+                "name": extinf_title(line),
                 "tvgId": clean_text(attr(line, "tvg-id"), 100),
                 "logo": clean_text(attr(line, "tvg-logo"), 1200),
                 "group": clean_text(attr(line, "group-title") or source["name"], 100),
