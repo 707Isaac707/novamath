@@ -1,0 +1,41 @@
+NOVA MATH v1.2 - VERCEL ENVIRONMENT VARIABLES
+
+REQUIRED FOR ACCOUNTS
+MEDIAHUB_AUTH_SECRET
+- Required for username/password accounts and signed sessions.
+- Keep the same value after accounts are created.
+- Legacy alias SOCIAL_AUTH_SECRET is still accepted.
+
+REQUIRED STORAGE INTEGRATION
+Upstash Redis through the Vercel Marketplace
+- The integration supplies Redis credentials automatically.
+- Supported credential pairs are KV_REST_API_URL + KV_REST_API_TOKEN or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
+- Do not manually expose these values to frontend JavaScript.
+
+OPTIONAL FEATURES
+MEDIAHUB_ADMIN_USERNAME
+- Nova Math username allowed to open the private Admin Dashboard.
+
+OPENROUTER_API_KEY
+- Required only for the Assistant app.
+- Keep this variable name exactly as written.
+
+FOOD_REQUEST_DISCORD_WEBHOOK
+- Optional. Sends new Snack Drop order notifications to Discord.
+
+YOUTUBE_API_KEY
+- Optional. Enables YouTube-powered search/features used by the build.
+
+STEAMGRIDDB_API_KEY
+- Optional. Enables SteamGridDB artwork lookup.
+
+PROXY BROWSER
+- No Vercel environment variables are required.
+- Nova Math uses the existing Scramjet defaults directly:
+  https://mediahub-proxy.onrender.com
+  wss://mediahub-proxy.onrender.com/wisp/
+- Jellyfin configuration has been removed from Nova Math v1.2.
+
+SPORTS
+- No sports API key is required.
+- ESPN site scoreboards are requested through /api/sports-api with a direct browser fallback for scoreboards.

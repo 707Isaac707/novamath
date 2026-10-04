@@ -1,0 +1,16 @@
+NOVA MATH SOCIAL / ACCOUNT SETUP - VERCEL
+
+Required:
+1. Connect Upstash Redis to the Vercel project from the Vercel Marketplace.
+2. Add MEDIAHUB_AUTH_SECRET in Vercel Project Settings > Environment Variables.
+3. Redeploy.
+
+Nova Math uses username + password accounts. Passwords are stored as salted scrypt hashes. Plain-text passwords are not stored in the browser or project files.
+
+Cloud data stored in Redis includes profile data, friends, presence, messages, notifications, synced settings, game parties, Watch Parties, Snack Drop orders, and admin activity.
+
+If login says the account service is unavailable:
+- Confirm the Upstash Redis integration is connected to the project.
+- Confirm MEDIAHUB_AUTH_SECRET exists in the Production environment.
+- Redeploy after adding or changing variables.
+- Check Vercel Function logs for /api/social-auth.

@@ -1,0 +1,25 @@
+NOVA MATH v1.2 - VERCEL HOBBY EDITION
+
+This archive is structured specifically for https://vercel.com/drop.
+index.html is at the ZIP root and Vercel Functions are in /api.
+
+DEPLOY
+1. Open https://vercel.com/drop in Safari or Chrome.
+2. Upload this ZIP as-is. Do not unzip it first.
+3. Choose the Math team.
+4. Name the project novamath-v1-1 (or another unused name).
+5. Deploy.
+
+AFTER THE FIRST DEPLOY
+1. Open the project in Vercel.
+2. Connect an Upstash Redis database from Marketplace / Storage.
+3. Add MEDIAHUB_AUTH_SECRET in Settings > Environment Variables.
+4. Add optional variables from ENVIRONMENT-VARIABLES.txt.
+5. Redeploy once after storage/environment changes.
+
+The Scramjet backend remains hosted separately on Render.
+
+HOBBY PLAN
+- This build uses 11 deployable /api functions, below Vercel Hobby's 12-function limit.
+- Jellyfin configuration was removed.
+- The Scramjet browser uses its existing Render defaults directly, with no proxy environment variables required.

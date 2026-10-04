@@ -1,0 +1,11 @@
+{
+  "name": "nova-math-vercel",
+  "private": true,
+  "version": "1.2.0",
+  "dependencies": {
+    "@upstash/redis": "^1.39.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

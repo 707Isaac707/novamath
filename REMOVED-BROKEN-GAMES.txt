@@ -1,0 +1,19 @@
+REMOVED OR REPLACED IN THIS BUILD
+===============================
+
+- Fnaf4halloween (docs/clfnaf4halloween.html)
+- Fnafanimatronics (docs/clfnafanimatronics.html)
+- Fnafworldd (docs/clfnafworldd.html)
+- Hextris (docs/clhextris.html)
+- Mariominusrabbids (docs/clmariominusrabbids.html)
+- O╠êoo (docs/clO╠êoo.html)
+- Poke╠ümonstunningsteel (docs/clPoke╠ümonstunningsteel.html)
+- Smashkarts (docs/clsmashkarts.html)
+- Tanukisunset (docs/cltanukisunset.html)
+- Throwapotato (docs/clthrowapotato.html)
+- ╩ÿ (docs/cl╩ÿ.html)
+- Fd (docs/fd.html)
+
+FNAF replacements:
+- Removed broken irv77/hd_fnaf catalog links for FNAF 1, 2, 3, 4, World, Sister Location, Pizzeria Simulator, and Ultimate Custom Night.
+- Replaced the external FNAF browser sources with eight self-contained local HTML fan-style games so the FNAF row stays inside Nova Math.

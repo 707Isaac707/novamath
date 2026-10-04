@@ -1,0 +1,15 @@
+Nova Math v1.2 Scramjet backend
+
+Apps > Web Browser is connected by default to:
+https://mediahub-proxy.onrender.com
+
+Wisp endpoint:
+wss://mediahub-proxy.onrender.com/wisp/
+
+No Vercel proxy environment variables are required in Nova Math v1.2.
+The browser uses the defaults above directly.
+
+The deployed Scramjet-App includes wisp-js/server and uses the /wisp/ WebSocket endpoint.
+No API key is required for Scramjet itself.
+
+The old cloud-game shortcuts were removed from the Games library in v68. The general Web Browser app remains available under Apps.

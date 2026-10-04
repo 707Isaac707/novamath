@@ -1,0 +1,8 @@
+Nova Math v1.2
+
+Calculator unlock hotfix:
+- 6753 = now unlocks Nova Math before any optional account gate can block entry.
+- Unlock stays active for the current session while navigating tabs, games, apps, and search.
+- The Lock button explicitly returns to the calculator and clears the unlock session.
+- Service-worker caches were bumped so older broken v1.1 unlock code is not reused.
+- Vercel Hobby function count remains under the plan limit.
