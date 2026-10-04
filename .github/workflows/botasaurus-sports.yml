@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "*/5 * * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/botasaurus-run-now"
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ jobs:
       - name: Check scraper secret
         id: configured
         env:
-          BOTASAURUS_INGEST_SECRET: \${{ secrets.BOTASAURUS_INGEST_SECRET }}
+          BOTASAURUS_INGEST_SECRET: ${{ secrets.BOTASAURUS_INGEST_SECRET }}
         shell: bash
         run: |
           if [ -n "$BOTASAURUS_INGEST_SECRET" ]; then
@@ -50,8 +55,8 @@ jobs:
       - name: Scrape, validate, and replace Vercel sports streams
         if: steps.configured.outputs.enabled == 'true'
         env:
-          BOTASAURUS_INGEST_SECRET: \${{ secrets.BOTASAURUS_INGEST_SECRET }}
-          BOTASAURUS_SPORTS_SOURCE_URLS: \${{ vars.BOTASAURUS_SPORTS_SOURCE_URLS }}
+          BOTASAURUS_INGEST_SECRET: ${{ secrets.BOTASAURUS_INGEST_SECRET }}
+          BOTASAURUS_SPORTS_SOURCE_URLS: ${{ vars.BOTASAURUS_SPORTS_SOURCE_URLS }}
           NOVA_SPORTS_INGEST_URL: https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest
           BOTASAURUS_VALIDATE_STREAMS: "1"
           BOTASAURUS_VALIDATION_WORKERS: "16"
