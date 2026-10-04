@@ -621,7 +621,7 @@ def validate_hls(channel):
 def dedupe(channels):
     seen = set()
     output = []
-    max_candidates = env_int("BOTASAURUS_MAX_CANDIDATES", 1400, 1, 2000)
+    max_candidates = env_int("BOTASAURUS_MAX_CANDIDATES", 2000, 1, 2500)
 
     for channel in channels:
         url = normalize_stream_url(channel.get("url", ""))
@@ -715,8 +715,10 @@ def main():
             print("[source] %s failed: %s" % (source["name"], clean_text(exc, 180)), flush=True)
 
     selenium_channels, selenium_stats, selenium_errors = scrape_seleniumbase_sources()
-    all_channels.extend(selenium_channels)
-    source_stats.extend(selenium_stats)
+    # Preserve FMHY-listed official rendered providers before large generic
+    # playlists so they cannot be crowded out by the candidate limit.
+    all_channels = selenium_channels + all_channels
+    source_stats = selenium_stats + source_stats
     errors.extend(selenium_errors)
 
     candidates = dedupe(all_channels)
