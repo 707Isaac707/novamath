@@ -1,14 +1,15 @@
+const {getStore}=require('../vercel-store.cjs');
 const PLAYLISTS=[
   {label:'IPTV-org Americas',url:'https://iptv-org.github.io/iptv/regions/amer.m3u',source:'iptv-org-americas'},
   {label:'IPTV Cat My List',url:'https://list.iptvcat.com/my_list/43a7920721455a884a8c7d23ee99c27f.m3u8',source:'iptvcat-my-list'}
 ];
-const CACHE_MS=6*60*60*1000;
+const CACHE_MS=5*60*1000;
 let memoryCache={at:0,payload:null};
 
 const headers={
   'Content-Type':'application/json; charset=utf-8',
   'Access-Control-Allow-Origin':'*',
-  'Cache-Control':'public, max-age=300, s-maxage=21600, stale-while-revalidate=86400'
+  'Cache-Control':'public, max-age=60, s-maxage=300, stale-while-revalidate=900'
 };
 
 function attr(line,name){
@@ -48,6 +49,27 @@ function parseM3u(text='',source='playlist'){
   return channels.filter(c=>{const key=c.url;if(!key||seen.has(key))return false;seen.add(key);return true;});
 }
 
+async function fetchScrapedSnapshot(){
+  try{
+    const store=getStore('mediahub-sports');
+    const snap=await store.get('botasaurus/current',{type:'json'});
+    if(!snap||!Array.isArray(snap.channels))return {ok:false,label:'Verified scraper pool',error:'no scraper snapshot'};
+    const expiresAt=Number(snap.expiresAt||0);
+    if(expiresAt&&expiresAt<=Date.now())return {ok:false,label:'Verified scraper pool',error:'snapshot expired'};
+    const channels=snap.channels.filter(c=>c&&/^https?:\/\//i.test(String(c.url||''))).map(c=>({
+      name:cleanName(c.name||'Live Channel'),
+      group:cleanName(c.group||'Live TV'),
+      logo:String(c.logo||''),
+      tvgId:String(c.tvgId||''),
+      url:String(c.url||''),
+      source:String(c.source||'verified-scraper')
+    }));
+    return {ok:channels.length>0,label:'Verified scraper pool',url:'internal://botasaurus-current',channels};
+  }catch(error){
+    return {ok:false,label:'Verified scraper pool',url:'internal://botasaurus-current',error:String(error?.message||error||'snapshot error')};
+  }
+}
+
 async function fetchPlaylist(entry){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),10000);
@@ -68,7 +90,7 @@ exports.handler=async()=>{
     if(memoryCache.payload&&Date.now()-memoryCache.at<CACHE_MS){
       return {statusCode:200,headers,body:JSON.stringify(memoryCache.payload)};
     }
-    const results=await Promise.all(PLAYLISTS.map(fetchPlaylist));
+    const results=await Promise.all([...PLAYLISTS.map(fetchPlaylist),fetchScrapedSnapshot()]);
     const good=results.filter(r=>r.ok);
     if(!good.length)throw new Error(results.map(r=>`${r.label}: ${r.error}`).join('; ')||'all playlists failed');
 
