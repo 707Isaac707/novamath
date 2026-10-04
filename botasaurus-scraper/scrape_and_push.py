@@ -289,7 +289,7 @@ def push_snapshot(channels, sources, errors):
         "version": 1,
         "batchId": batch_id,
         "generatedAt": int(time.time() * 1000),
-        "ttlSeconds": env_int("BOTASAURUS_SNAPSHOT_TTL_SECONDS", 900, 60, 1800),
+        "ttlSeconds": env_int("BOTASAURUS_SNAPSHOT_TTL_SECONDS", 3600, 300, 7200),
         "channels": channels,
         "sources": sources,
         "errors": errors[:20],
