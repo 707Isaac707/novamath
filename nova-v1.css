@@ -1,0 +1,159 @@
+/* Nova Math v1 — black / white / chrome platform skin */
+:root{
+  --hub-bg:#050506;
+  --hub-panel:#101014;
+  --hub-panel2:#18181d;
+  --hub-red:#f4f4f5;
+  --hub-text:#f7f7f8;
+  --hub-muted:#a8a8b0;
+  --hub-line:#2a2b31;
+  --mh-accent:#f4f4f5;
+  --mh-accent-2:#9fa3ad;
+  --nova-chrome:linear-gradient(135deg,#fff 0%,#8f939b 32%,#f7f7f8 52%,#676b74 76%,#fff 100%);
+}
+html{background:#050506}
+body{background:#050506;color:#f7f7f8}
+body.dashboard-mode{background:#050506!important;color:#f7f7f8!important;min-width:0!important;overflow:hidden}
+
+/* Calculator lock screen */
+.nova-lockscreen{
+  position:fixed!important;inset:0!important;z-index:20000!important;display:grid!important;place-items:center!important;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(255,255,255,.07),transparent 33%),
+    radial-gradient(circle at 50% 100%,rgba(135,140,154,.08),transparent 35%),
+    #050506!important;
+  color:#fff!important;overflow:auto!important;padding:28px!important;
+}
+body.hub-mode .nova-lockscreen{display:none!important}
+.nova-calc-shell{width:min(420px,94vw);position:relative;z-index:2}
+.nova-calc-window{
+  border:1px solid rgba(255,255,255,.13);border-radius:28px;padding:14px 14px 16px;
+  background:linear-gradient(145deg,rgba(26,26,31,.98),rgba(8,8,11,.99));
+  box-shadow:0 40px 120px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter:blur(22px)
+}
+.nova-calc-topbar{height:38px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:0 8px;color:#b5b6bd;font-size:11px}
+.nova-calc-topbar strong{font-size:12px;color:#f0f0f2;letter-spacing:.1px}
+.nova-calc-appmark{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:#202127;border:1px solid #303139;color:#eee;font-weight:900}
+.nova-calc-mode{font-size:9px;color:#777b85;text-transform:uppercase;letter-spacing:1px;font-weight:800}
+.nova-calc-screen{height:126px;margin:4px 2px 13px;border-radius:20px;padding:18px 17px 14px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;overflow:hidden;background:linear-gradient(180deg,#08090b,#0e0f13);border:1px solid #25262d;box-shadow:inset 0 8px 30px rgba(0,0,0,.42)}
+.nova-calc-history{height:22px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#676a73;font-size:12px;font-variant-numeric:tabular-nums}
+.nova-calc-display{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-weight:350;font-size:clamp(38px,10vw,54px);letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1.05}
+.nova-calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.nova-key{height:66px;border:1px solid #2b2c32;border-radius:17px;background:linear-gradient(145deg,#23242a,#17181d);color:#f6f6f7;font:600 21px/1 system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 4px 12px rgba(0,0,0,.2);transition:transform .08s ease,background .12s,border-color .12s}
+.nova-key:hover{border-color:#444650;background:linear-gradient(145deg,#2b2c32,#1d1e23)}
+.nova-key:active,.nova-key.is-pressed{transform:scale(.96);background:#303139}
+.nova-key-soft{background:linear-gradient(145deg,#d7d8dc,#aaaeb6);border-color:#c7c9ce;color:#090a0d;font-weight:750}
+.nova-key-soft:hover{background:linear-gradient(145deg,#fff,#b7bac2);border-color:#fff}
+.nova-key-op{background:linear-gradient(145deg,#484a52,#282a30);border-color:#50525b;color:#fff;font-size:24px}
+.nova-key-equals{background:var(--nova-chrome);border-color:#e9eaed;color:#07080a;font-weight:900;font-size:25px}
+.nova-key-zero{grid-column:span 2;text-align:left;padding-left:28px}
+.nova-calc-footer{display:flex;justify-content:space-around;padding:14px 5px 1px;color:#50535c;font-size:8px;font-weight:900;letter-spacing:.8px}
+.nova-calc-window.nova-calc-error{animation:novaCalcShake .32s ease}
+@keyframes novaCalcShake{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+
+/* Unlock sequence */
+.nova-unlock-transition{position:fixed;inset:0;z-index:30000;background:#020203;display:grid;place-items:center;align-content:center;gap:16px;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s ease,visibility .18s ease;overflow:hidden}
+.nova-unlock-transition.active{opacity:1;visibility:visible}
+.nova-unlock-transition:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.18) 49%,transparent 58%);transform:translateX(-120%)}
+.nova-unlock-transition.active:before{animation:novaSweep .72s .12s ease-out both}
+.nova-unlock-transition img{position:relative;z-index:2;width:min(420px,72vw);height:auto;filter:drop-shadow(0 0 35px rgba(255,255,255,.12));transform:scale(.76);opacity:0}
+.nova-unlock-transition.active img{animation:novaLogoIn .66s .1s cubic-bezier(.15,.85,.2,1.05) forwards}
+.nova-unlock-name{position:relative;z-index:2;font:900 13px/1 system-ui;letter-spacing:7px;color:#d8d9de;opacity:0;transform:translateY(8px)}
+.nova-unlock-transition.active .nova-unlock-name{animation:novaNameIn .4s .36s ease forwards}
+.nova-unlock-rings{position:absolute;width:min(680px,95vw);aspect-ratio:1;border:1px solid rgba(255,255,255,.08);border-radius:50%;box-shadow:0 0 0 70px rgba(255,255,255,.015),0 0 0 150px rgba(255,255,255,.008);transform:scale(.55);opacity:0}
+.nova-unlock-transition.active .nova-unlock-rings{animation:novaRing .9s ease-out forwards}
+@keyframes novaLogoIn{0%{transform:scale(.72) rotate(-2deg);opacity:0;filter:blur(8px)}70%{opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1}}
+@keyframes novaNameIn{to{opacity:1;transform:none}}
+@keyframes novaRing{30%{opacity:.8}100%{transform:scale(1.25);opacity:0}}
+@keyframes novaSweep{to{transform:translateX(120%)}}
+body.nova-unlocking .nova-calc-window{transform:scale(.98);opacity:.3;filter:blur(4px);transition:.28s}
+
+/* Nova app loader */
+.app-loader-card{border-color:#303139!important;background:linear-gradient(145deg,#16171b,#08090b)!important}
+.app-loader-mark{background:#08090b!important;border:1px solid #303139!important;box-shadow:0 10px 30px rgba(0,0,0,.45)!important;overflow:hidden;padding:4px}
+.app-loader-mark img{width:100%;height:100%;object-fit:contain}
+.app-loader-track span{background:var(--nova-chrome)!important}
+
+/* Hub chrome */
+.hub-header{background:linear-gradient(180deg,rgba(7,7,9,.98),rgba(7,7,9,.91))!important;border-bottom:1px solid rgba(255,255,255,.07)!important;box-shadow:0 10px 40px rgba(0,0,0,.32)!important;backdrop-filter:blur(18px)}
+.nova-brand{display:flex!important;align-items:center!important;gap:9px!important;min-width:max-content!important;color:#f4f4f5!important}
+.nova-brand img{width:46px;height:34px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(255,255,255,.05))}
+.nova-brand span{font-size:13px!important;letter-spacing:2.2px!important;color:#e8e9ec!important;font-weight:950!important}
+
+/* Better scrolling top navigation */
+.nova-nav-wrap{position:relative;min-width:0;display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:center;gap:4px}
+.nova-nav-wrap:before,.nova-nav-wrap:after{content:"";position:absolute;top:0;bottom:0;width:34px;z-index:3;pointer-events:none;opacity:0;transition:opacity .15s}
+.nova-nav-wrap:before{left:30px;background:linear-gradient(90deg,#08080a,transparent)}
+.nova-nav-wrap:after{right:30px;background:linear-gradient(-90deg,#08080a,transparent)}
+.nova-nav-wrap.can-left:before,.nova-nav-wrap.can-right:after{opacity:1}
+.nova-nav-btn{width:29px;height:29px;border:1px solid #2c2d33;border-radius:9px;background:#121318;color:#bfc1c7;display:grid;place-items:center;cursor:pointer;z-index:4;transition:.14s ease;font-size:17px}
+.nova-nav-btn:hover{background:#23242a;border-color:#444650;color:#fff}
+.nova-nav-btn:disabled{opacity:.22;cursor:default}
+.hub-header .tabs{scroll-snap-type:x proximity!important;scroll-padding-inline:12px;padding-inline:5px!important;gap:8px!important}
+.hub-header .tab-btn{scroll-snap-align:center;padding:9px 13px!important;margin:9px 0!important;border-radius:999px!important;color:#a5a7af!important;font-weight:750!important;transition:background .16s,color .16s,box-shadow .16s!important}
+.hub-header .tab-btn:hover{background:#17181d!important;color:#fff!important}
+.hub-header .tab-btn.active{background:linear-gradient(145deg,#efeff1,#a9acb3)!important;color:#08090b!important;box-shadow:inset 0 1px 0 #fff,0 7px 22px rgba(0,0,0,.25)!important}
+.hub-header .tab-btn::after{display:none!important}
+.hub-header .tabs:focus-visible{outline:1px solid #555862;outline-offset:2px;border-radius:10px}
+
+/* Chrome controls */
+.hub-quick-btn,.hub-settings-btn,.classroom-switch,.hub-social-btn,.mh-notify-btn{border-color:#303139!important;background:#111217!important;color:#d9dae0!important;border-radius:10px!important}
+.hub-quick-btn:hover,.hub-settings-btn:hover,.classroom-switch:hover,.hub-social-btn:hover,.mh-notify-btn:hover{background:#222329!important;border-color:#53555e!important;color:#fff!important}
+.classroom-switch-icon{color:#dfe0e3!important}
+.nova-lock-btn{min-width:max-content}
+
+/* Neutralize old red-heavy shell while keeping provider/category identity where useful */
+#tab-arcade{background:#060607!important}
+#tab-movies{background:radial-gradient(circle at 50% -10%,#202126,transparent 34%),#070708!important}
+.arcade-hero{background:linear-gradient(90deg,rgba(3,3,4,.96),rgba(3,3,4,.72) 42%,rgba(3,3,4,.18) 73%),linear-gradient(180deg,transparent 55%,#060607),url('/assets/retro-bowl-hero-poster.jpg') center/cover no-repeat!important}
+.arcade-hero-video{filter:grayscale(.35) saturate(.55) contrast(1.08) brightness(.72)!important}
+.hero-eyebrow,.section-kicker,.movie-source-kicker{color:#b8bac1!important}
+.search-btn,.food-submit{background:linear-gradient(135deg,#f5f5f6,#9da1aa)!important;color:#090a0c!important}
+.game-search-shell,.netflix-search-box{border-color:#33353c!important;background:#111217!important}
+.netflix-game-card:hover{filter:brightness(1.12) saturate(.82)!important}
+.game-art{box-shadow:0 12px 32px rgba(0,0,0,.38)!important}
+
+/* Platform cards / modals */
+.mh-standard-card,.mh-game-detail-card,.mh-platform-card,.mh-setting-card,.mh-social-modal,.mh-account-gate .mh-gate-card,.mh-app-window-card{border-color:#303139!important;background:linear-gradient(145deg,#15161a,#0c0d10)!important}
+.mh-app-window-dot{background:#dfe0e4!important;box-shadow:0 0 16px rgba(255,255,255,.22)!important}
+
+/* Smooth horizontal rows */
+.game-row,.snack-category-chips,.spotify-row,.mh-party-invites>div{scroll-behavior:smooth;overscroll-behavior-x:contain;scrollbar-width:none}
+.game-row{scroll-snap-type:x proximity}
+.game-row>*{scroll-snap-align:start}
+
+/* Pane transitions */
+body.hub-mode .tab-pane.active{animation:novaPaneIn .18s ease-out}
+@keyframes novaPaneIn{from{opacity:.35;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* Better focus on Chromebook */
+body.mh-chromebook button:focus-visible,body.mh-chromebook a:focus-visible,body.mh-chromebook input:focus-visible{outline:2px solid #f3f3f4!important;outline-offset:2px!important}
+
+@media (max-width:1180px){
+  .hub-header{grid-template-columns:auto minmax(360px,1fr) auto!important;gap:12px!important}
+  .nova-brand span{display:none}
+  .nova-brand img{width:42px}
+}
+@media (max-width:920px){
+  body{min-width:0!important}
+  .hub-header{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;padding:0 10px!important}
+  .nova-nav-wrap{grid-template-columns:24px minmax(0,1fr) 24px}
+  .nova-nav-btn{width:23px;height:29px;border-radius:7px}
+  .hub-header .tab-btn{font-size:11px!important;padding:8px 10px!important}
+  .nova-brand img{width:38px;height:28px}
+}
+@media (max-width:600px){
+  .nova-lockscreen{padding:12px!important}
+  .nova-calc-window{border-radius:22px;padding:11px}
+  .nova-key{height:59px;border-radius:15px;font-size:19px}
+  .nova-calc-screen{height:108px}
+  .nova-calc-topbar{height:32px}
+  .nova-calc-footer{padding-top:10px}
+  .nova-nav-btn{display:none}
+  .nova-nav-wrap{display:block}
+  .hub-header{grid-template-columns:auto minmax(0,1fr) auto!important}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

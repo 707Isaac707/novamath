@@ -1,0 +1,51 @@
+/* Nova Math v70 Chromebook-first overrides */
+.mh-quick-dock{display:none!important}
+.mh-ai-fab,.mh-ai-panel{display:none!important}
+body{min-width:900px}
+.hub-header{height:64px;padding:0 24px;gap:20px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.hub-header .tabs{min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;gap:18px;align-items:stretch;scroll-behavior:smooth}
+.hub-header .tabs::-webkit-scrollbar{display:none}
+.hub-header .tab-btn{position:relative;flex:0 0 auto;padding:22px 0 20px;font-size:13px;white-space:nowrap}
+.hub-header .tab-btn::after{content:"";position:absolute;left:0;right:0;bottom:7px;height:2px;border-radius:2px;background:transparent;transform:scaleX(.35);transition:transform .16s ease,background .16s ease}
+.hub-header .tab-btn.active::after{background:currentColor;transform:scaleX(1)}
+.hub-tools{margin-left:0;gap:7px}
+.game-genre-nav{top:64px!important}
+.mh-global-music-player.mh-has-track{left:18px!important;right:18px!important;bottom:14px!important}
+body:has(.mh-global-music-player.mh-has-track){padding-bottom:82px}
+.mh-account-gate{padding:28px 44px;background:rgba(5,5,7,.97)}
+.mh-gate-card{width:min(980px,calc(100vw - 88px));max-height:calc(100vh - 56px);overflow:auto;grid-template-columns:minmax(0,1fr) 390px;padding:30px 32px;border-radius:20px}
+.mh-gate-copy h2{font-size:48px;letter-spacing:-2px}
+.mh-gate-benefits{grid-template-columns:1fr 1fr}
+.mh-gate-form{padding:22px}
+.mh-gate-actions button,.mh-gate-bottom button{min-height:40px}
+.mh-social-modal{width:420px;right:18px;top:74px;max-height:calc(100vh - 92px)}
+.mh-platform-modal,.mh-platform-search,.mh-update-modal{padding:24px}
+.mh-standard-card,.mh-game-detail-card{max-height:calc(100vh - 48px)}
+@media (min-width:900px) and (max-width:1180px){
+  .hub-header{padding:0 16px;gap:14px}
+  .hub-header .tabs{gap:14px}
+  .hub-header .tab-btn{font-size:12px}
+  .hub-tools .hub-tool-label,.hub-tools .hub-settings-btn span:last-child{display:none}
+  .hub-settings-btn,.classroom-switch,.hub-quick-btn,.mh-notify-btn,.hub-social-btn{width:36px;height:36px;padding:0;justify-content:center}
+  .game-genre-nav{top:64px!important}
+}
+@media (min-width:900px) and (max-height:700px){
+  .hub-header{height:56px}
+  .hub-header .tab-btn{padding:18px 0 16px}
+  .hub-header .tab-btn::after{bottom:5px}
+  .game-genre-nav{top:56px!important}
+  .arcade-hero{min-height:380px;max-height:460px}
+  .mh-gate-card{max-height:calc(100vh - 30px);padding:22px 26px}
+  .mh-gate-copy h2{font-size:40px}
+}
+
+/* Remove the old v69 Chromebook dock spacing entirely. */
+.mh-chromebook .tab-pane.active{padding-left:0!important}
+#mhQuickDock{display:none!important}
+
+/* Chromebook navigation stays at the top and never turns into a mobile dock. */
+@media (min-width:900px){
+  .hub-header{position:sticky;top:0;z-index:9500}
+  .hub-header .tabs{overscroll-behavior-x:contain}
+  .hub-header .tab-btn:focus-visible{outline:2px solid currentColor;outline-offset:-5px}
+}

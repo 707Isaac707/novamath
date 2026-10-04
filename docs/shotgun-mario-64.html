@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Shotgun Mario 64</title>
+  <style>
+    html,body,#game{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #status{position:fixed;inset:0;display:grid;place-items:center;color:#fff;background:#000;z-index:2;font-size:14px}
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="status">Loading Shotgun Mario 64…</div>
+  <script>
+    window.EJS_player = '#game';
+    window.EJS_core = 'n64';
+    window.EJS_gameName = 'Shotgun Mario 64';
+    window.EJS_color = '#e53935';
+    window.EJS_startOnLoaded = true;
+    window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+    window.EJS_gameUrl = 'shotgun-mario-64-rom.zip';
+    window.addEventListener('load', function(){
+      setTimeout(function(){ var s=document.getElementById('status'); if(s) s.remove(); }, 1800);
+    });
+  </script>
+  <script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
+</body>
+</html>
