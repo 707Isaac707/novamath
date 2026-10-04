@@ -1,4 +1,0 @@
-botasaurus==4.0.97
-fastapi>=0.115,<1
-uvicorn[standard]>=0.34,<1
-requests>=2.32,<3
