@@ -54,6 +54,7 @@ BOTASAURUS_INGEST_SECRET
 - Before the first successful Botasaurus push, Nova keeps the existing IPTV fallback.
 - After the first successful push, Botasaurus becomes the authoritative Sports stream source.
 - Expired Botasaurus snapshots are removed instead of falling back to old streams.
+- Redeploy production after adding or changing this Vercel secret.
 
 GITHUB BOTASAURUS SCRAPER
 - Workflow: .github/workflows/botasaurus-sports.yml
