@@ -38,6 +38,32 @@ async function fetchText(url,ttl=300000){
   }finally{clearTimeout(timer);}
 }
 
+
+async function fetchBotasaurusChannels(){
+  const base=txt(process.env.BOTASAURUS_API_URL,500).replace(/\/+$/,'');
+  if(!/^https?:\/\//i.test(base))return [];
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),4500);
+  try{
+    const r=await fetch(base+'/sports/channels',{headers:{'User-Agent':'NovaMath/1.3.2','Accept':'application/json'},signal:controller.signal});
+    if(!r.ok)return [];
+    const data=await r.json();
+    const rows=Array.isArray(data?.channels)?data.channels:[];
+    return rows.map(c=>({
+      name:txt(c?.name||'Sports Stream',120),
+      url:txt(c?.url,1200),
+      logo:txt(c?.logo,1200),
+      group:txt(c?.group||'Botasaurus',100),
+      country:txt(c?.country,30),
+      language:txt(c?.language,30),
+      tvgId:txt(c?.tvgId,100),
+      source:'botasaurus-public-page'
+    })).filter(c=>/^https?:\/\//i.test(c.url)&&/\.m3u8(?:$|[?#])/i.test(c.url));
+  }catch(e){
+    console.warn('botasaurus sports discovery unavailable',txt(e?.message,120));
+    return [];
+  }finally{clearTimeout(timer);}
+}
+
 function teamRow(c={}){
   return {
     id:txt(c.id||c.team?.id,40),homeAway:txt(c.homeAway,10),score:txt(c.score,16),winner:!!c.winner,
@@ -168,13 +194,14 @@ exports.handler=async event=>{try{
     const iptvOrg=settled[0].status==='fulfilled'?parseM3U(settled[0].value,'iptv-org-sports'):[];
     const iptvCatAll=settled[1].status==='fulfilled'?parseM3U(settled[1].value,'iptvcat-my-list'):[];
     const iptvCat=iptvCatAll.filter(c=>sportsHint.test(`${c.name} ${c.group||''}`));
+    const botasaurus=await fetchBotasaurusChannels();
     const seen=new Set(),channels=[];
-    for(const c of [...iptvCat,...iptvOrg]){if(!c?.url||seen.has(c.url))continue;seen.add(c.url);channels.push(c);}
+    for(const c of [...botasaurus,...iptvCat,...iptvOrg]){if(!c?.url||seen.has(c.url))continue;seen.add(c.url);channels.push(c);}
     channels.sort((a,b)=>Number(/red\s*zone|redzone/i.test(b.name))-Number(/red\s*zone|redzone/i.test(a.name))||String(a.name).localeCompare(String(b.name)));
-    const redZone=channels.find(c=>c.source==='iptvcat-my-list'&&/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
+    const redZone=channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
     if(!channels.length)throw new Error('No sports channels returned');
-    const sourceParts=[];if(iptvOrg.length)sourceParts.push('IPTV-org Sports');if(iptvCat.length)sourceParts.push('IPTV Cat My List');
-    return{statusCode:200,headers:{...headers,'Cache-Control':'public, max-age=120, s-maxage=240, stale-while-revalidate=600'},body:JSON.stringify({channels:channels.slice(0,900),redZone,updatedAt:Date.now(),source:sourceParts.join(' + ')||'Sports playlists',sources:{iptvOrg:iptvOrg.length,iptvCat:iptvCat.length,iptvCatUrl:IPTV_CAT_URL}})};
+    const sourceParts=[];if(botasaurus.length)sourceParts.push('Botasaurus');if(iptvOrg.length)sourceParts.push('IPTV-org Sports');if(iptvCat.length)sourceParts.push('IPTV Cat My List');
+    return{statusCode:200,headers:{...headers,'Cache-Control':'public, max-age=120, s-maxage=240, stale-while-revalidate=600'},body:JSON.stringify({channels:channels.slice(0,900),redZone,updatedAt:Date.now(),source:sourceParts.join(' + ')||'Sports playlists',sources:{botasaurus:botasaurus.length,botasaurusConfigured:!!process.env.BOTASAURUS_API_URL,iptvOrg:iptvOrg.length,iptvCat:iptvCat.length,iptvCatUrl:IPTV_CAT_URL}})};
   }
 
   return{statusCode:400,headers,body:JSON.stringify({error:'Unknown sports action'})};
