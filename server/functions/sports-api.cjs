@@ -224,17 +224,22 @@ exports.handler=async event=>{try{
       sources:Array.isArray(body.sources)?body.sources.slice(0,50).map(x=>({url:txt(x?.url,1200),name:txt(x?.name,120),count:Math.max(0,Number(x?.count)||0)})):[],
       errors:Array.isArray(body.errors)?body.errors.slice(0,20).map(x=>({url:txt(x?.url,1200),error:txt(x?.error,180)})):[]
     };
-    await sportsStore().setJSON('botasaurus/current',snapshot);
+    const store=sportsStore();
+    await store.setJSON('botasaurus/current',snapshot);
+    await store.setJSON('botasaurus/activated',{at:receivedAt,batchId:snapshot.batchId});
     return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({ok:true,replaced:true,count:snapshot.channels.length,batchId:snapshot.batchId,expiresAt:snapshot.expiresAt})};
   }
 
   if(action==='botasaurus-status'){
+    const store=sportsStore();
     const snapshot=await getFreshBotasaurusSnapshot();
+    const activated=botasaurusEnabled()?await store.get('botasaurus/activated',{type:'json',consistency:'strong'}):null;
     return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({
       configured:botasaurusEnabled(),
+      activated:!!activated,
       fresh:!!snapshot,
       count:snapshot?.channels?.length||0,
-      batchId:snapshot?.batchId||'',
+      batchId:snapshot?.batchId||activated?.batchId||'',
       generatedAt:snapshot?.generatedAt||0,
       receivedAt:snapshot?.receivedAt||0,
       expiresAt:snapshot?.expiresAt||0
@@ -257,20 +262,24 @@ exports.handler=async event=>{try{
 
   if(action==='channels'){
     if(botasaurusEnabled()){
+      const store=sportsStore();
       const snapshot=await getFreshBotasaurusSnapshot();
-      const channels=snapshot?.channels||[];
-      const redZone=channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
-      return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({
-        channels,
-        redZone,
-        updatedAt:snapshot?.receivedAt||Date.now(),
-        generatedAt:snapshot?.generatedAt||0,
-        expiresAt:snapshot?.expiresAt||0,
-        batchId:snapshot?.batchId||'',
-        stale:!snapshot,
-        source:'Botasaurus',
-        sources:{botasaurus:channels.length}
-      })};
+      const activated=await store.get('botasaurus/activated',{type:'json',consistency:'strong'});
+      if(snapshot||activated){
+        const channels=snapshot?.channels||[];
+        const redZone=channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
+        return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({
+          channels,
+          redZone,
+          updatedAt:snapshot?.receivedAt||Date.now(),
+          generatedAt:snapshot?.generatedAt||0,
+          expiresAt:snapshot?.expiresAt||0,
+          batchId:snapshot?.batchId||activated?.batchId||'',
+          stale:!snapshot,
+          source:'Botasaurus',
+          sources:{botasaurus:channels.length}
+        })};
+      }
     }
 
     const SPORTS_URL='https://iptv-org.github.io/iptv/categories/sports.m3u';
