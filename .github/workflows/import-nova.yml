@@ -67,6 +67,7 @@ jobs:
         run: |
           rm -rf .nova-import
           rm -rf ".github/    .github"
+          find . -type f \( -name '*.orig' -o -name '*.rej' \) -delete
 
       - name: Validate v1.3.2 hashes and structure
         shell: bash
