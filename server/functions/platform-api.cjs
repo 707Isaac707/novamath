@@ -88,7 +88,7 @@ exports.handler=async event=>{try{
   }
   if(action==='admin-test-alert'){
     requireUser();if(!isAdmin())return{statusCode:403,headers,body:JSON.stringify({error:'This account is not an admin.'})};
-    const discord=await postDiscord(adminWebhook(),{username:'Nova Math',embeds:[{title:'✅ Nova Math admin alert test',description:`Admin alerts are connected for @${me.username}.`,color:12632256,footer:{text:'Nova Math v1.3.1'}}]});
+    const discord=await postDiscord(adminWebhook(),{username:'Nova Math',embeds:[{title:'✅ Nova Math admin alert test',description:`Admin alerts are connected for @${me.username}.`,color:12632256,footer:{text:'Nova Math v1.3.2'}}]});
     return{statusCode:200,headers,body:JSON.stringify({ok:true,configured:discord.configured,sent:discord.sent})};
   }
   if(action==='admin-summary'||action==='admin-overview'){
