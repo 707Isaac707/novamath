@@ -54,6 +54,9 @@ jobs:
           BOTASAURUS_SPORTS_SOURCE_URLS: ${{ vars.BOTASAURUS_SPORTS_SOURCE_URLS }}
           NOVA_SPORTS_INGEST_URL: https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest
           BOTASAURUS_VALIDATE_STREAMS: "1"
-          BOTASAURUS_VALIDATION_WORKERS: "16"
+          BOTASAURUS_VALIDATION_WORKERS: "48"
+          BOTASAURUS_MAX_CANDIDATES: "1400"
+          BOTASAURUS_MAX_STREAMS: "1000"
+          BOTASAURUS_STREAM_TIMEOUT_SECONDS: "6"
           BOTASAURUS_SNAPSHOT_TTL_SECONDS: "3600"
         run: python botasaurus-scraper/scrape_and_push.py
