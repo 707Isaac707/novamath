@@ -1,4 +1,4 @@
-name: Import complete Nova Math v1.3.2
+name: Finalize Nova Math v1.3.2
 
 on:
   push:
@@ -11,215 +11,153 @@ permissions:
   contents: write
 
 concurrency:
-  group: nova-v132-import
+  group: nova-finalize-v1-3-2
   cancel-in-progress: false
 
 jobs:
-  import:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Restore exact canonical v1.2 source layer
+      - name: Restore exact canonical backend bundle
         shell: bash
         run: |
-          cat .nova-import/source.part1 .nova-import/source.part2 .nova-import/source.part3 \
-            | base64 -d | tar xzf - -C .
+          cat .nova-import/source.part1               .nova-import/source.part2               .nova-import/source.part3             | base64 -d > /tmp/nova-source.tar.gz
 
-          test -f package.json
-          test -f vercel.json
-          test -f server/vercel-bridge.mjs
-          FUNCTIONS=$(find api -maxdepth 1 -type f -name '*.mjs' | wc -l | tr -d ' ')
-          test "$FUNCTIONS" = "11"
+          gzip -t /tmp/nova-source.tar.gz
+          echo "Canonical source archive contents:"
+          tar -tzf /tmp/nova-source.tar.gz
+          tar -xzf /tmp/nova-source.tar.gz -C .
 
-      - name: Download unchanged Nova Math library from production
+      - name: Apply exact public v1.3.2 changes
+        shell: bash
+        run: |
+          cat .nova-import/patch.part1               .nova-import/patch.part2               .nova-import/patch.part3               .nova-import/patch.part4             | base64 -d | gunzip > /tmp/all-v132.patch
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("/tmp/all-v132.patch")
+          text = p.read_text()
+
+          # v1.2 index.html had no final newline, causing the next diff header
+          # to be attached to </html>. Restore that separator.
+          text = re.sub(r"(?<!\n)(--- a/)", r"\n\1", text)
+
+          selected = {
+              "enhancements.js",
+              "index.html",
+              "nova-v1.css",
+              "platform-v69.js",
+              "sw.js",
+          }
+
+          sections = re.split(r"(?=^--- a/)", text, flags=re.M)
+          kept = []
+          for section in sections:
+              if not section.startswith("--- a/"):
+                  continue
+              first = section.splitlines()[0]
+              path = first[len("--- a/"):]
+              if path in selected:
+                  kept.append(section)
+
+          if len(kept) != len(selected):
+              found = [s.splitlines()[0] for s in kept]
+              raise SystemExit(f"Expected {len(selected)} public patch sections, found {len(kept)}: {found}")
+
+          Path("/tmp/public-v132.patch").write_text("".join(kept))
+          PY
+
+          patch --batch --forward -p1 < /tmp/public-v132.patch
+
+      - name: Remove temporary import files
+        shell: bash
+        run: |
+          rm -rf .nova-import
+          rm -rf ".github/    .github"
+
+      - name: Validate exact v1.3.2 hashes and structure
         shell: bash
         run: |
           python3 - <<'PY'
-          import concurrent.futures
-          import pathlib
-          import re
-          import time
-          import urllib.parse
-          import urllib.request
+          from pathlib import Path
+          import hashlib
 
-          base = "https://www.totallynovamath.duckdns.org"
-          root = pathlib.Path(".")
-
-          public_files = {
-              "app-icon-192.png",
-              "nova-v1.js",
-              "platform.css",
-              "games.js",
-              "apps/choices-voices-packs.html",
-              "nova-v1.css",
-              "platform-v69.js",
-              "sports-v69.css",
-              "classroom-icon.svg",
-              "enhancements.css",
-              "style.css",
-              "v70-chromebook.css",
-              "sw.js",
-              "enhancements.js",
-              "watch-party.js",
-              "v68-ui.css",
-              "assets/vine-boom.wav",
-              "assets/secret-6753.jpg",
-              "assets/retro-bowl-hero.mp4",
-              "assets/nova-logo.png",
-              "assets/retro-bowl-hero-poster.jpg",
-              "watch-party.css",
-              "native-apps.css",
-              "app-icon-512.png",
-              "manifest.webmanifest",
-              "sports-v69.js",
-              "callback.html",
-              "platform.js",
-              "social.css",
-              "v68-ui.js",
-              "platform-v69.css",
-              "index.html",
-              "native-apps.js",
-              "social.js",
+          expected = {
+              "DEPLOY-VERCEL-DROP.txt": "5aeafa74558f4c6c837a5d5a71adc10f8859c43fe89b68eb4dd0e90f132965b1",
+              "ENVIRONMENT-VARIABLES.txt": "3b62a9fbe2bb2c3f24f7721afdcf84d634954afaaed05824520444c6f2ed4531",
+              "enhancements.js": "936ff7953fdd2258fd1a6a4540d0683565a35891ce7a3b90e10723b3f05ade4b",
+              "index.html": "e499e0559d67c11f863a0f16e53d06c8f9217b66945852ef6e8853717c3f55a2",
+              "nova-v1.css": "87e6a36bde93165db5cf19fbeba869cc675dd48633f8cf4243a1b6f31cb8ab5c",
+              "package.json": "3f926199f997420943eac8cd6a1a0b5c649ab2264c2955485033125432f913b9",
+              "platform-v69.js": "d43532def7277f9a6608966fd8fb354e91f60ae9644aefc263f1d1adc5695971",
+              "server/functions/assistant.cjs": "bf15d48bd58ca76236520b8526abe08384a7b5e96aaebb1b5a982dad3484c96c",
+              "server/functions/game-art.cjs": "9038b1ca6bbe31d26213b424f70ca8e63a8fb99ea743eefc4759057e6cc3464b",
+              "server/functions/platform-api.cjs": "55d22a4ef58ee1c4e77de6dd8237152b5ded9a22b0d2539d42590d3ecb7b5bd6",
+              "sw.js": "2e7efc128a305eba1d563deafc02398f144dd27fa03d1e8ac584682d46560ae5",
+              "NOVA-MATH-V1.3.2.txt": "a7b3b7e072733b530b67babcf3f8f4d77958517d3956ddd4ab13af1b674c618d",
           }
 
-          extra_docs = {
-              "docs/clhextris.html",
-              "docs/clmariominusrabbids.html",
-              "docs/clonenightasfreddy.html",
-              "docs/clsmashkarts.html",
-              "docs/clsuperkidadventure.htm",
-              "docs/cltanukisunset.html",
-              "docs/clthrowapotato.html",
-              "docs/fd.html",
-              "docs/shotgun-mario-64-rom.zip",
-          }
+          bad = []
+          for path, wanted in expected.items():
+              p = Path(path)
+              if not p.is_file():
+                  bad.append(f"{path}: missing")
+                  continue
+              actual = hashlib.sha256(p.read_bytes()).hexdigest()
+              if actual != wanted:
+                  bad.append(f"{path}: {actual} != {wanted}")
 
-          def url_for(path):
-              return base + "/" + urllib.parse.quote(path, safe="/")
+          if bad:
+              raise SystemExit("Canonical hash validation failed:\n" + "\n".join(bad))
 
-          def fetch(path, retries=5):
-              dest = root / path
-              dest.parent.mkdir(parents=True, exist_ok=True)
-              last = None
-              for attempt in range(retries):
-                  try:
-                      req = urllib.request.Request(
-                          url_for(path),
-                          headers={"User-Agent": "NovaMath-GitHub-Importer/1.3.2"},
-                      )
-                      with urllib.request.urlopen(req, timeout=120) as response:
-                          if response.status != 200:
-                              raise RuntimeError(f"HTTP {response.status}")
-                          with dest.open("wb") as out:
-                              while True:
-                                  chunk = response.read(1024 * 1024)
-                                  if not chunk:
-                                      break
-                                  out.write(chunk)
-                      return
-                  except Exception as exc:
-                      last = exc
-                      if attempt + 1 < retries:
-                          time.sleep(2 * (attempt + 1))
-              raise RuntimeError(f"{path}: {last}")
+          api = list(Path("api").glob("*.mjs"))
+          docs = [p for p in Path("docs").iterdir() if p.is_file()]
+          server = [p for p in Path("server").rglob("*") if p.is_file()]
 
-          fetch("games.js")
-          games_text = pathlib.Path("games.js").read_text("utf-8", errors="replace")
-          docs = set(re.findall(r'"file":"(docs/[^"]+)"', games_text))
-          docs = {p for p in docs if p.startswith("docs/")}
-          if len(docs) != 1991:
-              raise SystemExit(f"Expected 1,991 referenced local games, found {len(docs)}")
+          if len(api) != 11:
+              raise SystemExit(f"Expected 11 API functions, found {len(api)}")
+          if len(docs) != 2001:
+              raise SystemExit(f"Expected 2001 docs files, found {len(docs)}")
+          if len(server) != 13:
+              raise SystemExit(f"Expected 13 server files, found {len(server)}")
 
-          docs.update(extra_docs)
-          if len(docs) != 2000:
-              raise SystemExit(f"Expected 2,000 real docs files, found {len(docs)}")
-
-          targets = sorted((public_files - {"games.js"}) | docs)
-          print(f"Downloading {len(targets)} remaining public files...")
-
-          failures = []
-          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-              future_map = {pool.submit(fetch, p): p for p in targets}
-              for i, future in enumerate(concurrent.futures.as_completed(future_map), 1):
-                  path = future_map[future]
-                  try:
-                      future.result()
-                  except Exception as exc:
-                      failures.append(str(exc))
-                  if i % 100 == 0:
-                      print(f"Completed {i}/{len(targets)}")
-
-          if failures:
-              print("\n".join(failures[:50]))
-              raise SystemExit(f"{len(failures)} production downloads failed")
-
-          pathlib.Path("docs/.gitkeep").touch()
-          pathlib.Path("thumbs").mkdir(exist_ok=True)
-          pathlib.Path("thumbs/.gitkeep").touch()
-
-          actual_docs = [p for p in pathlib.Path("docs").iterdir() if p.is_file()]
-          if len(actual_docs) != 2001:
-              raise SystemExit(f"Expected 2,001 docs entries including .gitkeep, found {len(actual_docs)}")
-
-          print("Production library downloaded and verified.")
+          print("Canonical Nova Math v1.3.2 hashes verified.")
+          print("API functions:", len(api))
+          print("Docs files:", len(docs))
+          print("Server files:", len(server))
           PY
 
-      - name: Apply exact v1.3.2 patch
-        shell: bash
-        run: |
-          cat .nova-import/patch.part1 .nova-import/patch.part2 .nova-import/patch.part3 .nova-import/patch.part4 \
-            | base64 -d | gunzip > /tmp/v132.patch
+          node --check enhancements.js
+          node --check platform-v69.js
+          node --check sw.js
+          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -n1 node --check
 
-          git apply --check /tmp/v132.patch
-          git apply /tmp/v132.patch
+          ! grep -R -n -E 'BasicallyNoobYT|Basically Noob'               --exclude-dir=.git --exclude-dir=.github . || exit 1
+          ! grep -R -n -E 'WEB-HOOK|WEB_HOOK'               --exclude-dir=.git --exclude-dir=.github . || exit 1
 
-          echo 'Tm92YSBNYXRoIHYxLjMuMgoKLSBTaW1wbGlmaWVkIERpc2NvcmQgZW52aXJvbm1lbnQgdmFyaWFibGUgbmFtZXMgZm9yIFZlcmNlbC4KLSBVc2UgTk9WQV9SRVBPUlRTX1dFQkhPT0sgZm9yIHByaXZhdGUgaXNzdWUgcmVwb3J0cy4KLSBVc2UgTk9WQV9BRE1JTl9BTEVSVFNfV0VCSE9PSyBmb3IgYWRtaW4gYWxlcnRzLgotIFVzZSBGT09EX1JFUVVFU1RfRElTQ09SRF9XRUJIT09LIGZvciBTbmFjayBEcm9wIG5vdGlmaWNhdGlvbnMuCi0gT2xkICpfRElTQ09SRF9XRUJIT09LIG5hbWVzIHJlbWFpbiBzdXBwb3J0ZWQgYXMgY29tcGF0aWJpbGl0eSBmYWxsYmFja3MuCi0gTm8gbmV3IFZlcmNlbCBmdW5jdGlvbnMgd2VyZSBhZGRlZC4K' \
-            | base64 -d > NOVA-MATH-V1.3.2.txt
+          grep -q 'FOOD_REQUEST_DISCORD_WEBHOOK' ENVIRONMENT-VARIABLES.txt
+          grep -q 'NOVA_REPORTS_WEBHOOK' ENVIRONMENT-VARIABLES.txt
+          grep -q 'NOVA_ADMIN_ALERTS_WEBHOOK' ENVIRONMENT-VARIABLES.txt
+          grep -q "BUILD='1.3.2'" platform-v69.js
+          grep -q 'novamath-shell-v1-3-2-hobby-1' sw.js
 
-          rm -rf .nova-import
-          rm -f README.md
-
-      - name: Validate canonical project
-        shell: bash
-        run: |
-          test -f index.html
-          test -f games.js
-          test -f sw.js
-          test -f package.json
-          test -f vercel.json
-          test -f server/vercel-bridge.mjs
-
-          FUNCTIONS=$(find api -maxdepth 1 -type f -name '*.mjs' | wc -l | tr -d ' ')
-          test "$FUNCTIONS" = "11"
-
-          DOCS=$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')
-          test "$DOCS" = "2001"
-
-          find . -maxdepth 1 -name '*.js' -print0 | xargs -0 -r -n1 node --check
-          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check
-
-          if grep -R -n -E 'BasicallyNoobYT|Basically Noob' \
-              --exclude-dir=.git --exclude='*.zip' .; then
-            echo "Forbidden branding found"
-            exit 1
-          fi
-
-          echo "Nova Math v1.3.2 validation passed."
-
-      - name: Commit complete Nova Math v1.3.2
+      - name: Commit canonical v1.3.2
         shell: bash
         run: |
           git config user.name "Nova Math Importer"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-
           if git diff --cached --quiet; then
-            echo "Nova Math v1.3.2 is already current."
+            echo "Nova Math v1.3.2 is already canonical."
           else
-            git commit -m "Import complete Nova Math v1.3.2 project"
+            git commit -m "Finalize canonical Nova Math v1.3.2"
             git push origin HEAD:main
           fi
