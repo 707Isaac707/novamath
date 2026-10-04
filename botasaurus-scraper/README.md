@@ -44,3 +44,26 @@ BOTASAURUS_SPORTS_SOURCE_URLS
 Comma- or newline-separated source URLs. Optional labels use Label|URL.
 
 Only use sources you are allowed to scrape and redistribute.
+
+
+## SeleniumBase rendered-page scraper
+
+Nova also includes SeleniumBase 4.55.0 as a second scraper pass for public pages
+whose HLS links only appear after JavaScript renders.
+
+Set the optional GitHub Actions repository variable:
+
+SELENIUMBASE_SPORTS_SOURCE_URLS
+
+Use comma- or newline-separated public page URLs. Optional labels use Label|URL.
+
+Example:
+
+Public Sports Page|https://example.org/live
+
+SeleniumBase runs normal headless Chrome, waits for the page to render, scans the
+rendered page source for direct .m3u8 URLs, and sends candidates through the same
+HLS validation and dedupe pipeline as Botasaurus.
+
+It does not use UC/CDP anti-bot bypass, solve CAPTCHAs, bypass logins/paywalls,
+or inspect protected DRM traffic.
