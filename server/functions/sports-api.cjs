@@ -192,12 +192,10 @@ function defaultDateWindow(){
 }
 function scoreboardUrl(cfg,q={}){
   const url=new URL(`https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`);
-  const hasExplicit=!!(q.date||q.week||q.season||q.seasontype);
-  if(q.date&&/^\d{8}(?:-\d{8})?$/.test(q.date))url.searchParams.set('dates',q.date);
+  if(q.date&&/^\d{8}$/.test(q.date))url.searchParams.set('dates',q.date);
   if(q.week&&/^\d{1,2}$/.test(q.week))url.searchParams.set('week',q.week);
   if(q.season&&/^\d{4}$/.test(q.season))url.searchParams.set('season',q.season);
   if(q.seasontype&&/^[123]$/.test(q.seasontype))url.searchParams.set('seasontype',q.seasontype);
-  if(!hasExplicit)url.searchParams.set('dates',defaultDateWindow());
   url.searchParams.set('limit',(cfg.league==='college-football'||cfg.league==='mens-college-basketball')?'250':'100');
   return url.toString();
 }
@@ -213,7 +211,7 @@ exports.handler=async event=>{try{
     const channels=sanitizeIngestChannels(body.channels);
     const clear=body.clear===true;
     if(!clear&&!channels.length)return{statusCode:422,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'No valid HLS channels supplied'})};
-    const receivedAt=Date.now(),ttlSeconds=Math.max(60,Math.min(1800,Number(body.ttlSeconds)||900));
+    const receivedAt=Date.now(),ttlSeconds=Math.max(300,Math.min(7200,Number(body.ttlSeconds)||3600));
     const snapshot={
       version:1,
       batchId:txt(body.batchId||crypto.randomUUID(),100),
