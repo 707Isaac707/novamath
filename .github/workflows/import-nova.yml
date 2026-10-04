@@ -1,0 +1,89 @@
+name: Import verified Nova Math v1.3.2
+on:
+  push:
+    branches: [bootstrap/novamath-v1.3.2]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: nova-import-v1-3-2
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout verified import parts
+        uses: actions/checkout@v4
+        with:
+          ref: bootstrap/novamath-v1.3.2
+          path: bundle
+      - name: Checkout production source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+      - name: Verify and extract canonical project
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, zipfile, stat, shutil
+          root = pathlib.Path('bundle/.nova-import')
+          parts = sorted(root.glob('part-*'))
+          if len(parts) != 134:
+              raise SystemExit('Wrong number of ZIP parts')
+          archive = pathlib.Path('/tmp/nova-v1.3.2.zip')
+          with archive.open('wb') as dest:
+              for part in parts:
+                  with part.open('rb') as source:
+                      shutil.copyfileobj(source, dest)
+          expected = '1fddb927e9680d43186bfd57f033ca24925ba7602f6ae96362392f7545f0bbbe'
+          if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+              raise SystemExit('ZIP checksum mismatch')
+          out = pathlib.Path('site').resolve()
+          with zipfile.ZipFile(archive) as z:
+              for item in z.infolist():
+                  rel = pathlib.PurePosixPath(item.filename)
+                  if rel.is_absolute() or '..' in rel.parts:
+                      raise SystemExit('Unsafe ZIP path')
+                  if stat.S_ISLNK(item.external_attr >> 16):
+                      raise SystemExit('Symlink rejected')
+                  if any(x in {'.git', '.github', '.vercel', 'node_modules'} or x.startswith('.env') for x in rel.parts):
+                      continue
+                  dest = out.joinpath(*rel.parts)
+                  if item.is_dir():
+                      dest.mkdir(parents=True, exist_ok=True)
+                  else:
+                      dest.parent.mkdir(parents=True, exist_ok=True)
+                      dest.write_bytes(z.read(item))
+          bad = out / '.github/    .github/workflows/import-nova.yml'
+          if bad.exists():
+              bad.unlink()
+          (out / '.gitignore').write_text('.env\n.env.*\n.vercel/\nnode_modules/\n.DS_Store\n')
+          functions = list((out / 'api').glob('*.mjs'))
+          if len(functions) != 11:
+              raise SystemExit('Unexpected API function count')
+          required = ['index.html', 'games.js', 'sw.js', 'package.json', 'vercel.json', 'server/vercel-bridge.mjs']
+          if not all((out / p).is_file() for p in required):
+              raise SystemExit('Missing project files')
+          print('Verified canonical ZIP. Extracted project with 11 API functions.')
+          PY
+      - name: Check application JavaScript syntax
+        working-directory: site
+        shell: bash
+        run: |
+          find . -maxdepth 1 -name '*.js' -print0 | xargs -0 -n1 node --check
+          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Commit extracted project to main
+        working-directory: site
+        shell: bash
+        run: |
+          git config user.name "Nova Math Importer"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Canonical project is already imported."
+          else
+            git commit -m "Import complete Nova Math v1.3.2 project"
+            git push origin HEAD:main
+          fi
