@@ -1,3 +1,4 @@
+const crypto=require('crypto');
 const headers={
   'Content-Type':'application/json; charset=utf-8',
   'Cache-Control':'public, max-age=15, s-maxage=25, stale-while-revalidate=60'
@@ -36,6 +37,63 @@ async function fetchText(url,ttl=300000){
     if(!r.ok)throw new Error(`Upstream ${r.status}`);
     const value=await r.text();cache.set(k,{value,exp:Date.now()+ttl});return value;
   }finally{clearTimeout(timer);}
+}
+
+
+
+const sportsStore=()=>require('../vercel-store.cjs').getStore('mediahub-sports');
+const botasaurusEnabled=()=>!!String(process.env.BOTASAURUS_INGEST_SECRET||'').trim();
+
+function secureEqualHex(a,b){
+  try{
+    const aa=Buffer.from(String(a||''),'hex'),bb=Buffer.from(String(b||''),'hex');
+    return aa.length>0&&aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);
+  }catch{return false;}
+}
+
+function verifyBotasaurusPush(event,rawBody){
+  const secret=String(process.env.BOTASAURUS_INGEST_SECRET||'').trim();
+  if(!secret)return false;
+  const h=event.headers||{};
+  const ts=Number(h['x-nova-timestamp']||h['X-Nova-Timestamp']||0);
+  const sig=String(h['x-nova-signature']||h['X-Nova-Signature']||'').trim().toLowerCase();
+  const now=Math.floor(Date.now()/1000);
+  if(!Number.isFinite(ts)||Math.abs(now-ts)>300||!/^[a-f0-9]{64}$/.test(sig))return false;
+  const expected=crypto.createHmac('sha256',secret).update(String(ts)+'.').update(rawBody).digest('hex');
+  return secureEqualHex(sig,expected);
+}
+
+function sanitizeIngestChannels(rows){
+  const out=[],seen=new Set();
+  for(const row of Array.isArray(rows)?rows:[]){
+    const url=txt(row?.url,1600);
+    if(!/^https?:\/\//i.test(url)||!/\.m3u8(?:$|[?#])/i.test(url)||seen.has(url))continue;
+    seen.add(url);
+    out.push({
+      name:txt(row?.name||'Sports Stream',120),
+      url,
+      logo:txt(row?.logo,1200),
+      group:txt(row?.group||'Sports',100),
+      country:txt(row?.country,30),
+      language:txt(row?.language,30),
+      tvgId:txt(row?.tvgId,100),
+      sourcePage:txt(row?.sourcePage,1200),
+      source:'botasaurus-public-page'
+    });
+    if(out.length>=500)break;
+  }
+  return out;
+}
+
+async function getFreshBotasaurusSnapshot(){
+  if(!botasaurusEnabled())return null;
+  const store=sportsStore(),row=await store.get('botasaurus/current',{type:'json',consistency:'strong'});
+  if(!row||!Array.isArray(row.channels))return null;
+  if(Number(row.expiresAt||0)<=Date.now()){
+    await store.delete('botasaurus/current').catch(()=>{});
+    return null;
+  }
+  return row;
 }
 
 function teamRow(c={}){
@@ -146,6 +204,48 @@ function scoreboardUrl(cfg,q={}){
 exports.handler=async event=>{try{
   const q=event.queryStringParameters||{},action=txt(q.action||'scoreboard',30),leagueKey=txt(q.league||'nfl',12).toLowerCase(),cfg=LEAGUES[leagueKey]||LEAGUES.nfl;
 
+  if(action==='botasaurus-ingest'){
+    if(event.httpMethod!=='POST')return{statusCode:405,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'Method not allowed'})};
+    const rawBody=String(event.body||'');
+    if(!verifyBotasaurusPush(event,rawBody))return{statusCode:401,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'Invalid scraper signature'})};
+    let body={};try{body=JSON.parse(rawBody||'{}')}catch{return{statusCode:400,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'Invalid JSON'})}};
+    const channels=sanitizeIngestChannels(body.channels);
+    const clear=body.clear===true;
+    if(!clear&&!channels.length)return{statusCode:422,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({error:'No valid HLS channels supplied'})};
+    const receivedAt=Date.now(),ttlSeconds=Math.max(60,Math.min(1800,Number(body.ttlSeconds)||900));
+    const snapshot={
+      version:1,
+      batchId:txt(body.batchId||crypto.randomUUID(),100),
+      generatedAt:Number(body.generatedAt)||receivedAt,
+      receivedAt,
+      expiresAt:receivedAt+ttlSeconds*1000,
+      source:'Botasaurus',
+      channels:clear?[]:channels,
+      sources:Array.isArray(body.sources)?body.sources.slice(0,50).map(x=>({url:txt(x?.url,1200),name:txt(x?.name,120),count:Math.max(0,Number(x?.count)||0)})):[],
+      errors:Array.isArray(body.errors)?body.errors.slice(0,20).map(x=>({url:txt(x?.url,1200),error:txt(x?.error,180)})):[]
+    };
+    const store=sportsStore();
+    await store.setJSON('botasaurus/current',snapshot);
+    await store.setJSON('botasaurus/activated',{at:receivedAt,batchId:snapshot.batchId});
+    return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({ok:true,replaced:true,count:snapshot.channels.length,batchId:snapshot.batchId,expiresAt:snapshot.expiresAt})};
+  }
+
+  if(action==='botasaurus-status'){
+    const store=sportsStore();
+    const snapshot=await getFreshBotasaurusSnapshot();
+    const activated=botasaurusEnabled()?await store.get('botasaurus/activated',{type:'json',consistency:'strong'}):null;
+    return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({
+      configured:botasaurusEnabled(),
+      activated:!!activated,
+      fresh:!!snapshot,
+      count:snapshot?.channels?.length||0,
+      batchId:snapshot?.batchId||activated?.batchId||'',
+      generatedAt:snapshot?.generatedAt||0,
+      receivedAt:snapshot?.receivedAt||0,
+      expiresAt:snapshot?.expiresAt||0
+    })};
+  }
+
   if(action==='scoreboard'){
     const url=scoreboardUrl(cfg,q),data=await fetchJson(url,12000),events=(data?.events||[]).map(eventRow).sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
     return{statusCode:200,headers,body:JSON.stringify({
@@ -161,6 +261,27 @@ exports.handler=async event=>{try{
   }
 
   if(action==='channels'){
+    if(botasaurusEnabled()){
+      const store=sportsStore();
+      const snapshot=await getFreshBotasaurusSnapshot();
+      const activated=await store.get('botasaurus/activated',{type:'json',consistency:'strong'});
+      if(snapshot||activated){
+        const channels=snapshot?.channels||[];
+        const redZone=channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
+        return{statusCode:200,headers:{...headers,'Cache-Control':'no-store'},body:JSON.stringify({
+          channels,
+          redZone,
+          updatedAt:snapshot?.receivedAt||Date.now(),
+          generatedAt:snapshot?.generatedAt||0,
+          expiresAt:snapshot?.expiresAt||0,
+          batchId:snapshot?.batchId||activated?.batchId||'',
+          stale:!snapshot,
+          source:'Botasaurus',
+          sources:{botasaurus:channels.length}
+        })};
+      }
+    }
+
     const SPORTS_URL='https://iptv-org.github.io/iptv/categories/sports.m3u';
     const IPTV_CAT_URL='https://list.iptvcat.com/my_list/43a7920721455a884a8c7d23ee99c27f.m3u8';
     const sportsHint=/(?:\bsports?\b|espn|nfl|nba|wnba|mlb|nhl|mls|ncaa|football|soccer|basketball|baseball|hockey|golf|tennis|racing|motorsport|fight|boxing|ufc|red\s*zone|redzone)/i;
@@ -171,7 +292,7 @@ exports.handler=async event=>{try{
     const seen=new Set(),channels=[];
     for(const c of [...iptvCat,...iptvOrg]){if(!c?.url||seen.has(c.url))continue;seen.add(c.url);channels.push(c);}
     channels.sort((a,b)=>Number(/red\s*zone|redzone/i.test(b.name))-Number(/red\s*zone|redzone/i.test(a.name))||String(a.name).localeCompare(String(b.name)));
-    const redZone=channels.find(c=>c.source==='iptvcat-my-list'&&/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
+    const redZone=channels.find(c=>/red\s*zone|redzone/i.test(`${c.name} ${c.group||''}`))||null;
     if(!channels.length)throw new Error('No sports channels returned');
     const sourceParts=[];if(iptvOrg.length)sourceParts.push('IPTV-org Sports');if(iptvCat.length)sourceParts.push('IPTV Cat My List');
     return{statusCode:200,headers:{...headers,'Cache-Control':'public, max-age=120, s-maxage=240, stale-while-revalidate=600'},body:JSON.stringify({channels:channels.slice(0,900),redZone,updatedAt:Date.now(),source:sourceParts.join(' + ')||'Sports playlists',sources:{iptvOrg:iptvOrg.length,iptvCat:iptvCat.length,iptvCatUrl:IPTV_CAT_URL}})};

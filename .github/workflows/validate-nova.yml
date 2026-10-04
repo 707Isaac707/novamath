@@ -1,0 +1,26 @@
+name: Validate Nova Math
+
+on:
+  push:
+    branches:
+      - main
+      - botasaurus-sports
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Botasaurus scraper syntax
+        run: python -m py_compile botasaurus-scraper/scrape_and_push.py
+      - name: Check Sports backend syntax
+        run: node --check server/functions/sports-api.cjs
+      - name: Check Sports frontend syntax
+        run: node --check sports-v69.js
