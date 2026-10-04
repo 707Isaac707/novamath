@@ -18,9 +18,9 @@ from seleniumbase import Driver
 DEFAULT_INGEST_URL = "https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest"
 DEFAULT_SOURCES = [
     {"name": "IPTV-org Sports", "url": "https://iptv-org.github.io/iptv/categories/sports.m3u", "mode": "all"},
-    {"name": "IPTV-org United States", "url": "https://iptv-org.github.io/iptv/countries/us.m3u", "mode": "relevant"},
+    {"name": "IPTV-org United States", "url": "https://iptv-org.github.io/iptv/countries/us.m3u", "mode": "all"},
     {"name": "IPTV-org English", "url": "https://iptv-org.github.io/iptv/languages/eng.m3u", "mode": "relevant"},
-    {"name": "IPTV-org Americas", "url": "https://iptv-org.github.io/iptv/regions/amer.m3u", "mode": "relevant"},
+    {"name": "IPTV-org Americas", "url": "https://iptv-org.github.io/iptv/regions/amer.m3u", "mode": "all"},
     {"name": "IPTV-org Global Index", "url": "https://iptv-org.github.io/iptv/index.m3u", "mode": "relevant"},
     {"name": "IPTV Cat Sports", "url": "https://list.iptvcat.com/my_list/43a7920721455a884a8c7d23ee99c27f.m3u8", "mode": "all"},
 ]
@@ -34,6 +34,23 @@ HLS_RE = re.compile(
     r"""https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""",
     re.IGNORECASE,
 )
+
+
+FMHY_VIDEO_URL = "https://www.reddit.com/r/FREEMEDIAHECKYEAH/wiki/video/"
+FMHY_OFFICIAL_RENDER_SOURCES = [
+    {"name": "Pluto TV Live", "url": "https://pluto.tv/us/watch/live-tv/"},
+    {"name": "Xumo Play Networks", "url": "https://play.xumo.com/networks"},
+    {"name": "Tubi Live TV", "url": "https://tubitv.com/live"},
+    {"name": "Plex Live TV", "url": "https://watch.plex.tv/live-tv"},
+    {"name": "The Roku Channel", "url": "https://therokuchannel.roku.com/"},
+]
+FMHY_OFFICIAL_HOSTS = {
+    "pluto.tv": "Pluto TV",
+    "play.xumo.com": "Xumo Play",
+    "tubitv.com": "Tubi",
+    "watch.plex.tv": "Plex",
+    "therokuchannel.roku.com": "The Roku Channel",
+}
 
 
 def env_text(name, default=""):
@@ -55,6 +72,63 @@ def env_bool(name, default=False):
 
 def clean_text(value, limit=160):
     return " ".join(str(value or "").split())[:limit]
+
+
+def discover_fmhy_official_sources():
+    if not env_bool("FMHY_OFFICIAL_DISCOVERY", True):
+        return []
+
+    discovered = []
+    seen = set()
+    try:
+        response = requests.get(
+            FMHY_VIDEO_URL,
+            headers={"User-Agent": "NovaMath-FMHY-Discovery/1.0"},
+            timeout=(5, 12),
+        )
+        response.raise_for_status()
+        raw = html.unescape(response.text or "")
+        hrefs = re.findall(r'href=["\']([^"\']+)["\']', raw, re.IGNORECASE)
+        for raw_url in hrefs:
+            url = urljoin(FMHY_VIDEO_URL, raw_url)
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            if host.startswith("www."):
+                host = host[4:]
+            matched = None
+            for allowed_host, label in FMHY_OFFICIAL_HOSTS.items():
+                if host == allowed_host or host.endswith("." + allowed_host):
+                    matched = label
+                    break
+            if not matched:
+                continue
+            key = (matched, parsed.scheme + "://" + (parsed.netloc or "") + (parsed.path or "/"))
+            if key in seen:
+                continue
+            seen.add(key)
+            discovered.append({
+                "name": "FMHY: " + matched,
+                "url": url[:1200],
+            })
+    except Exception as exc:
+        print("[fmhy] discovery failed: %s" % clean_text(exc, 160), flush=True)
+
+    # Keep stable official fallbacks so transient Reddit rendering changes do not
+    # remove already-approved providers from the discovery pass.
+    for row in FMHY_OFFICIAL_RENDER_SOURCES:
+        key = (row["name"], row["url"])
+        if key not in seen:
+            discovered.append(dict(row))
+            seen.add(key)
+
+    output = []
+    url_seen = set()
+    for row in discovered:
+        if row["url"] in url_seen:
+            continue
+        url_seen.add(row["url"])
+        output.append(row)
+    return output[:20]
 
 
 def parse_labeled_urls_env(name):
@@ -373,6 +447,30 @@ def scrape_source(http: Request, source):
     }
 
 
+def extract_hls_from_resource_urls(resource_urls, source):
+    rows = []
+    seen = set()
+    for raw_url in resource_urls or []:
+        if ".m3u8" not in str(raw_url).lower():
+            continue
+        url = normalize_stream_url(raw_url, source["url"])
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        rows.append({
+            "name": clean_text(source["name"], 120),
+            "url": url,
+            "logo": "",
+            "group": clean_text(source["name"], 100),
+            "country": "",
+            "language": "",
+            "tvgId": "",
+            "sourcePage": source["url"],
+            "source": "seleniumbase-public-page",
+        })
+    return rows
+
+
 def extract_hls_from_rendered_html(rendered_html, source):
     html_text = str(rendered_html or "")
     normalized = html_text.replace("\\/", "/").replace("\\u0026", "&").replace("\\u003d", "=")
@@ -402,6 +500,15 @@ def extract_hls_from_rendered_html(rendered_html, source):
 
 def scrape_seleniumbase_sources():
     sources = parse_labeled_urls_env("SELENIUMBASE_SPORTS_SOURCE_URLS")
+    sources.extend(discover_fmhy_official_sources())
+    deduped_sources = []
+    source_seen = set()
+    for source in sources:
+        if source["url"] in source_seen:
+            continue
+        source_seen.add(source["url"])
+        deduped_sources.append(source)
+    sources = deduped_sources
     if not sources:
         return [], [], []
 
@@ -420,10 +527,29 @@ def scrape_seleniumbase_sources():
 
         for source in sources:
             try:
+                try:
+                    driver.execute_script("performance.clearResourceTimings()")
+                except Exception:
+                    pass
                 driver.get(source["url"])
                 time.sleep(wait_seconds)
                 rendered = driver.get_page_source()
                 rows = extract_hls_from_rendered_html(rendered, source)
+                try:
+                    resource_urls = driver.execute_script(
+                        "return performance.getEntriesByType('resource').map(e => e.name)"
+                    ) or []
+                except Exception:
+                    resource_urls = []
+                rows.extend(extract_hls_from_resource_urls(resource_urls, source))
+                deduped_rows = []
+                row_seen = set()
+                for row in rows:
+                    if row["url"] in row_seen:
+                        continue
+                    row_seen.add(row["url"])
+                    deduped_rows.append(row)
+                rows = deduped_rows
                 channels.extend(rows)
                 stats.append({
                     "name": "SeleniumBase: " + source["name"],
