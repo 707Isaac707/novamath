@@ -1,131 +1,180 @@
-name: Import Nova Math v1.3.2
+name: Bootstrap Nova Math from live production
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/import-nova.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: nova-import-v1-3-2
+  group: nova-live-bootstrap
   cancel-in-progress: false
 
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout main
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download canonical v1.3.2 ZIP
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p /tmp/nova-release
-          gh release download v1.3.2 \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "*.zip" \
-            --dir /tmp/nova-release
-
-      - name: Verify and extract Nova Math
+      - name: Import unchanged production files
         shell: bash
+        env:
+          NOVA_SOURCE: https://totallynovamath.duckdns.org
         run: |
           python3 - <<'PY'
-          import hashlib, pathlib, zipfile, stat, shutil
+          import concurrent.futures
+          import pathlib
+          import re
+          import time
+          import urllib.parse
+          import urllib.request
 
-          zips = list(pathlib.Path('/tmp/nova-release').glob('*.zip'))
-          if len(zips) != 1:
-              raise SystemExit(f'Expected exactly one ZIP asset, found {len(zips)}')
+          base = "https://totallynovamath.duckdns.org"
+          root = pathlib.Path(".")
 
-          archive = zips[0]
-          expected = '1fddb927e9680d43186bfd57f033ca24925ba7602f6ae96362392f7545f0bbbe'
-          actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-          if actual != expected:
-              raise SystemExit(f'ZIP checksum mismatch: {actual}')
-
-          out = pathlib.Path('/tmp/nova-src')
-          out.mkdir(parents=True, exist_ok=True)
-
-          with zipfile.ZipFile(archive) as z:
-              for item in z.infolist():
-                  rel = pathlib.PurePosixPath(item.filename)
-
-                  if rel.is_absolute() or '..' in rel.parts:
-                      raise SystemExit(f'Unsafe ZIP path: {item.filename}')
-
-                  if stat.S_ISLNK(item.external_attr >> 16):
-                      raise SystemExit(f'Symlink rejected: {item.filename}')
-
-                  if any(
-                      part in {'.git', '.github', '.vercel', 'node_modules'}
-                      or part.startswith('.env')
-                      for part in rel.parts
-                  ):
-                      continue
-
-                  dest = out.joinpath(*rel.parts)
-                  if item.is_dir():
-                      dest.mkdir(parents=True, exist_ok=True)
-                  else:
-                      dest.parent.mkdir(parents=True, exist_ok=True)
-                      dest.write_bytes(z.read(item))
-
-          required = [
-              'index.html',
-              'games.js',
-              'sw.js',
-              'package.json',
-              'vercel.json',
-              'server/vercel-bridge.mjs',
+          root_files = [
+              "nova-v1.js",
+              "platform.css",
+              "nova-v1.css",
+              "native-apps.css",
+              "manifest.webmanifest",
+              "platform-v69.js",
+              "callback.html",
+              "sw.js",
+              "sports-v69.css",
+              "v68-ui.css",
+              "app-icon-192.png",
+              "enhancements.css",
+              "v70-chromebook.css",
+              "social.js",
+              "platform-v69.css",
+              "classroom-icon.svg",
+              "app-icon-512.png",
+              "v68-ui.js",
+              "social.css",
+              "watch-party.css",
+              "enhancements.js",
+              "style.css",
+              "native-apps.js",
+              "sports-v69.js",
+              "watch-party.js",
+              "platform.js",
+              "games.js",
+              "index.html",
           ]
-          missing = [p for p in required if not (out / p).is_file()]
-          if missing:
-              raise SystemExit(f'Missing project files: {missing}')
 
-          functions = list((out / 'api').glob('*.mjs'))
-          if len(functions) != 11:
-              raise SystemExit(f'Expected 11 API functions, found {len(functions)}')
+          assets = [
+              "assets/vine-boom.wav",
+              "assets/secret-6753.jpg",
+              "assets/nova-logo.png",
+              "assets/retro-bowl-hero.mp4",
+              "assets/retro-bowl-hero-poster.jpg",
+              "apps/choices-voices-packs.html",
+          ]
 
-          print('Canonical Nova Math v1.3.2 ZIP verified successfully.')
+          extra_docs = [
+              "docs/Eaglercraft-Indev-Offline (1).html",
+              "docs/EaglercraftX 1.8.8(u29).html",
+              "docs/Helios-Offline (1).html",
+              "docs/clSuperMarioWorldThe SecretOfThe7GoldenStatues.html",
+              "docs/clhandsofwar (1).html",
+              "docs/clhextris.html",
+              "docs/clice age baby.html",
+              "docs/climpossiblequiz (1).html",
+              "docs/clmariominusrabbids.html",
+              "docs/clonenightasfreddy.html",
+              "docs/clsmashkarts.html",
+              "docs/clsubwaysurferssanfrancisco (1).html",
+              "docs/clsuperkidadventure.htm",
+              "docs/cltanukisunset.html",
+              "docs/clthelaststandunioncity (1).html",
+              "docs/clthrowapotato.html",
+              "docs/cltwinshot (1).html",
+              "docs/fd.html",
+              "docs/shotgun-mario-64-rom.zip",
+          ]
+
+          def url_for(path):
+              return base.rstrip("/") + "/" + urllib.parse.quote(path, safe="/")
+
+          def fetch(path, retries=4):
+              dest = root / path
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              last = None
+              for attempt in range(retries):
+                  try:
+                      req = urllib.request.Request(
+                          url_for(path),
+                          headers={"User-Agent": "NovaMath-GitHub-Importer/1.0"},
+                      )
+                      with urllib.request.urlopen(req, timeout=90) as response:
+                          if response.status != 200:
+                              raise RuntimeError(f"HTTP {response.status}")
+                          with dest.open("wb") as out:
+                              while True:
+                                  chunk = response.read(1024 * 1024)
+                                  if not chunk:
+                                      break
+                                  out.write(chunk)
+                      return path
+                  except Exception as exc:
+                      last = exc
+                      if attempt + 1 < retries:
+                          time.sleep(1.5 * (attempt + 1))
+              raise RuntimeError(f"Failed {path}: {last}")
+
+          # games.js is the canonical list of local game documents.
+          fetch("games.js")
+          games_text = pathlib.Path("games.js").read_text("utf-8", errors="replace")
+          docs = set(re.findall(r'"file":"(docs/[^"]+)"', games_text))
+          docs = {p for p in docs if p.startswith("docs/")}
+          docs.update(extra_docs)
+
+          if len(docs) < 1990:
+              raise SystemExit(f"Expected roughly 1,991 local game files, found {len(docs)}")
+
+          targets = sorted((set(root_files) - {"games.js"}) | set(assets) | docs)
+
+          print(f"Downloading {len(targets) + 1} production files...")
+          failures = []
+          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+              future_map = {pool.submit(fetch, p): p for p in targets}
+              for index, future in enumerate(concurrent.futures.as_completed(future_map), 1):
+                  path = future_map[future]
+                  try:
+                      future.result()
+                  except Exception as exc:
+                      failures.append(str(exc))
+                  if index % 100 == 0:
+                      print(f"Completed {index}/{len(targets)}")
+
+          if failures:
+              print("\n".join(failures[:30]))
+              raise SystemExit(f"{len(failures)} production downloads failed")
+
+          pathlib.Path("docs/.gitkeep").touch()
+          pathlib.Path("thumbs").mkdir(exist_ok=True)
+          pathlib.Path("thumbs/.gitkeep").touch()
+
+          print(f"Imported {len(docs)} docs plus Nova Math static assets.")
           PY
 
-      - name: Replace site with canonical project
-        shell: bash
-        run: |
-          rsync -a --delete \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='.gitignore' \
-            /tmp/nova-src/ ./
-
-          cat > .gitignore <<'EOF'
-          .env
-          .env.*
-          !.env.example
-          .vercel/
-          node_modules/
-          .DS_Store
-          EOF
-
-      - name: Check JavaScript syntax
-        shell: bash
-        run: |
-          find . -maxdepth 1 -name '*.js' -print0 | xargs -0 -r -n1 node --check
-          find api server -type f \( -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check
-
-      - name: Commit full Nova Math project
+      - name: Commit production library
         shell: bash
         run: |
           git config user.name "Nova Math Importer"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -A
-
           if git diff --cached --quiet; then
-            echo "Nova Math v1.3.2 is already imported."
+            echo "No production files changed."
           else
-            git commit -m "Import complete Nova Math v1.3.2 project"
+            git commit -m "Bootstrap Nova Math production library"
             git push origin HEAD:main
           fi
