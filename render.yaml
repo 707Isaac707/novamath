@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: nova-math
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start:render
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MEDIAHUB_AUTH_SECRET
+        sync: false
+      - key: MEDIAHUB_ADMIN_USERNAME
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: UNOROUTER_API_KEY
+        sync: false
+      - key: UNOROUTER_MODEL
+        sync: false
+      - key: UNOROUTER_FALLBACK_MODELS
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: STEAMGRIDDB_API_KEY
+        sync: false
+      - key: FOOD_REQUEST_DISCORD_WEBHOOK
+        sync: false
+      - key: NOVA_REPORTS_WEBHOOK
+        sync: false
+      - key: NOVA_ADMIN_ALERTS_WEBHOOK
+        sync: false
+      - key: BOTASAURUS_INGEST_SECRET
+        sync: false
