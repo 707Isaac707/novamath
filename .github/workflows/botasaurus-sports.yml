@@ -47,14 +47,14 @@ jobs:
         if: steps.configured.outputs.enabled == 'true'
         run: python -m pip install -r botasaurus-scraper/requirements.txt
 
-      - name: Scrape, validate, and replace Vercel sports streams
+      - name: Scrape, validate, and replace Nova sports streams
         if: steps.configured.outputs.enabled == 'true'
         env:
           BOTASAURUS_INGEST_SECRET: ${{ secrets.BOTASAURUS_INGEST_SECRET }}
           BOTASAURUS_SPORTS_SOURCE_URLS: ${{ vars.BOTASAURUS_SPORTS_SOURCE_URLS }}
           SELENIUMBASE_SPORTS_SOURCE_URLS: ${{ vars.SELENIUMBASE_SPORTS_SOURCE_URLS }}
           SELENIUMBASE_RENDER_WAIT_SECONDS: "3"
-          NOVA_SPORTS_INGEST_URL: https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest
+          NOVA_SPORTS_INGEST_URL: ${{ vars.NOVA_SPORTS_INGEST_URL || 'https://novamath-three.vercel.app/api/sports-api?action=botasaurus-ingest' }}
           BOTASAURUS_VALIDATE_STREAMS: "1"
           BOTASAURUS_VALIDATION_WORKERS: "48"
           BOTASAURUS_MAX_CANDIDATES: "2000"
